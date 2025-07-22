@@ -9,8 +9,8 @@
     2.docker-compose:
       services:
         qb-rss-web:
-          image: qb-rss-web
-          container_name: qb_rss_web1
+          image: mikandown
+          container_name: mikandown
           ports:
             - "5999:5000"
           volumes:
