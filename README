@@ -16,4 +16,4 @@
           volumes:
             - /volume3/docker/rss_mikan/data:/app/data
           restart: unless-stopped
-    3.打开映射端口网页.
+    3.打开映射端口网页
