@@ -1,0 +1,17 @@
+# Web 框架
+Flask
+Flask-APScheduler
+
+# qBittorrent API 客户端
+qbittorrent-api
+
+# RSS 和 HTML 解析
+feedparser
+beautifulsoup4
+lxml
+
+# 模拟浏览器的网络请求库
+curl_cffi
+
+# 生产环境 Web 服务器
+gunicorn

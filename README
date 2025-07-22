@@ -1,0 +1,7 @@
+通过mikanani获取的番剧rss链接,通过qbit自动下载番剧
+使用方法:
+1.本地安装
+    1.按照requirements.txt中的依赖
+    2.运行python main.py
+    3.打开本地网页localhost:5000,填写qbit配置等,代理可不填,右上角添加rss源
+2.DOCKER安装

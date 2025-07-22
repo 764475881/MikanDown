@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <title>RSS 下载器</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <style>
+        :root { --spacing-vertical: 1.5rem; }
+        .sidebar { position: fixed; left: 0; top: 0; height: 100vh; width: 320px; background-color: var(--background-color); padding: 1rem; border-right: 1px solid var(--card-border); z-index: 100; overflow-y: auto; transform: translateX(0); transition: transform 0.3s ease-in-out, width 0.3s ease-in-out; }
+        .sidebar-toggle { position: fixed; left: 320px; top: 50%; transform: translateY(-50%); z-index: 101; width: 24px; height: 70px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; background-color: var(--primary); color: var(--primary-inverse); border: 1px solid var(--primary-focus); border-left: none; border-radius: 0 8px 8px 0; cursor: pointer; transition: left 0.3s ease-in-out; }
+        body.sidebar-collapsed .sidebar { transform: translateX(-100%); }
+        body.sidebar-collapsed .main-content { margin-left: 0; width: 100%; }
+        body.sidebar-collapsed .sidebar-toggle { left: 0; }
+        .main-content { margin-left: 320px; width: calc(100% - 320px); padding: 1rem; transition: margin-left 0.3s ease-in-out, width 0.3s ease-in-out; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; }
+        .add-feed-form { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; }
+        .add-feed-form input { min-width: 300px; margin-bottom: 0; }
+        .feeds-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 220px)); gap: 1rem; justify-content: center; }
+        .card { padding: 0.75rem; text-align: center; display: flex; flex-direction: column; justify-content: space-between; height: 100%; background-color: var(--card-background-color); border-radius: var(--border-radius); border: 1px solid var(--card-border); }
+        .card img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; margin-bottom: 0.5rem; border-radius: var(--border-radius); }
+        .card h6 { margin: 0 0 0.5rem 0; font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .card-footer { display: flex; justify-content: center; align-items: center; padding-top: 0.5rem; border-top: 1px solid var(--card-border); font-size: 0.75rem; }
+        .card-footer button, .card-footer a { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
+        .log-container { height: 250px; overflow-y: scroll; background-color: var(--code-background-color); font-family: var(--font-mono); padding: 0.75rem; border-radius: var(--border-radius); white-space: pre-wrap; font-size: 0.8rem; margin-top: 1rem; }
+        .control-section { margin-bottom: var(--spacing-vertical); }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background-color: var(--card-background-color); padding: 2rem; border-radius: var(--border-radius); width: 90%; max-width: 500px; text-align: center; }
+        .modal-buttons { margin-top: 1.5rem; display: flex; justify-content: center; gap: 1rem; }
+        .subgroup-tag { display: inline-block; background-color: var(--primary-focus); color: var(--primary-inverse); padding: 0.1rem 0.5rem; border-radius: var(--border-radius); font-size: 0.75rem; margin: 0 auto 0.5rem auto; }
+    </style>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+
+    <h1 style="text-align: center;">控制台</h1>
+    <section class="control-section">
+        <h2>qBittorrent 设置</h2>
+        <form id="qbit-settings-form">
+            <label for="qbit_host">Host / IP</label>
+            <input type="text" id="qbit_host" name="qbit_host" value="{{ config.qbit.host if config.qbit else '' }}">
+            <label for="qbit_port">端口</label>
+            <input type="number" id="qbit_port" name="qbit_port" value="{{ config.qbit.port if config.qbit else '' }}">
+            <label for="qbit_username">用户名</label>
+            <input type="text" id="qbit_username" name="qbit_username" value="{{ config.qbit.username if config.qbit else '' }}">
+            <label for="qbit_password">密码</label>
+            <input type="password" id="qbit_password" name="qbit_password" value="{{ config.qbit.password if config.qbit else '' }}">
+            <label for="qbit_save_path">根下载路径</label>
+            <input type="text" id="qbit_save_path" name="qbit_save_path" value="{{ config.qbit.save_path_base if config.qbit else '' }}">
+            <button type="submit">保存qBit设置</button>
+        </form>
+    </section>
+    <section class="control-section">
+        <h2>全局过滤器</h2>
+        <form id="global-filters-form">
+            <label for="include_keywords">必须包含 (空格分隔)</label>
+            <input type="text" id="include_keywords" name="include_keywords" value="{{ config.filters.include if config.filters else '' }}">
+            <label for="exclude_keywords">必须不含 (空格分隔)</label>
+            <input type="text" id="exclude_keywords" name="exclude_keywords" value="{{ config.filters.exclude if config.filters else '' }}">
+            <button type="submit">保存全局规则</button>
+        </form>
+    </section>
+    <section class="control-section">
+        <h2>代理设置</h2>
+        <form id="proxy-form" style="margin-bottom: 1rem;">
+            <label for="http_proxy">HTTP/S 代理</label>
+            <input type="text" id="http_proxy" name="http_proxy" placeholder="http://127.0.0.1:7890" value="{{ config.proxy.http }}">
+            <button type="submit">保存代理</button>
+        </form>
+    </section>
+    <section class="control-section">
+        <h2>手动检查</h2>
+        <a href="#" id="run-btn" role="button" class="contrast" style="width: 100%;">立即运行检查</a>
+    </section>
+    <section class="control-section">
+        <a href="/logout" role="button" class="secondary" style="width: 100%;">登出</a>
+    </section>
+    <section class="control-section">
+        <h3>实时日志</h3>
+        <div id="log" class="log-container">等待任务开始...</div>
+    </section>
+</aside>
+
+<button id="sidebar-toggle" class="sidebar-toggle" title="切换侧边栏">◀</button>
+<main class="main-content" id="main-content">
+    <div class="page-header">
+        <h2>当前订阅列表</h2>
+        <form id="add-feed-form" class="add-feed-form">
+            <input type="url" id="rss_url" name="rss_url" placeholder="https://mikanani.me/RSS/..." required>
+            <button type="submit" id="add-feed-btn">添加</button>
+        </form>
+    </div>
+    <div id="feeds-container"></div>
+</main>
+<div id="add-feed-modal-overlay" class="modal-overlay">
+    <div class="modal-content" onclick="event.stopPropagation();">
+        <h3 id="add-modal-title">为 "Some Title" 添加订阅</h3>
+        <p>请确认或修改此订阅的过滤规则（将继承全局规则）：</p>
+        <form id="add-feed-confirm-form">
+            <label for="add-include">必须包含 (空格分隔)</label>
+            <input type="text" id="add-include" name="include">
+            <label for="add-exclude">必须不含 (空格分隔)</label>
+            <input type="text" id="add-exclude" name="exclude">
+            <div class="modal-buttons">
+                <button type="button" class="secondary" id="add-modal-cancel-btn">取消</button>
+                <button type="submit" class="contrast">确认添加</button>
+            </div>
+        </form>
+    </div>
+</div>
+<div id="custom-modal-overlay" class="modal-overlay">
+    <div class="modal-content" onclick="event.stopPropagation();">
+        <h3 id="modal-title">对话框标题</h3>
+        <p id="modal-text">对话框内容</p>
+        <div id="modal-buttons" class="modal-buttons"></div>
+    </div>
+</div>
+
+<script>
+    // --- 元素获取 ---
+    const qbitSettingsForm = document.getElementById('qbit-settings-form');
+    const globalFiltersForm = document.getElementById('global-filters-form');
+    const proxyForm = document.getElementById('proxy-form');
+    const addFeedForm = document.getElementById('add-feed-form');
+    const addFeedBtn = document.getElementById('add-feed-btn');
+    const runBtn = document.getElementById('run-btn');
+    const feedsContainer = document.getElementById('feeds-container');
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    const body = document.body;
+    const logContainer = document.getElementById('log');
+    const addFeedModalOverlay = document.getElementById('add-feed-modal-overlay');
+
+    let initialConfig = {{ config | tojson }};
+    let currentRssUrlToAdd = '';
+    let currentRssTitleToAdd = '';
+
+    // --- 初始渲染 ---
+    renderFeeds(initialConfig.feeds);
+
+    // --- 核心函数：根据数据重新渲染订阅列表 ---
+    function renderFeeds(feeds) {
+        if (!feeds || feeds.length === 0) {
+            feedsContainer.innerHTML = '<p>还没有添加任何 RSS 订阅。请在左侧添加。</p>';
+            return;
+        }
+        const gridHtml = feeds.map((feed, index) => {
+            const subgroup = feed.subgroup || '未知';
+            return `
+            <div class="card">
+                <div>
+                    <img src="https://mikanani.me${feed.cover_url || '/images/Bangumi/default.jpg'}" alt="${feed.title} Cover"
+                         onerror="this.onerror=null;this.src='https://placehold.co/400x600/232830/dee2e6?text=No+Image';">
+                    <h6 title="${feed.title}">${feed.title}</h6>
+                    <p class="subgroup-tag">${subgroup}</p>
+                </div>
+                <footer class="card-footer">
+                    <button class="secondary outline delete-btn" data-id="${index}" data-title="${feed.title}">删除</button>
+                </footer>
+            </div>`;
+        }).join('');
+        feedsContainer.innerHTML = `<div class="feeds-grid">${gridHtml}</div>`;
+    }
+
+    // --- 事件监听 ---
+    qbitSettingsForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const btn = qbitSettingsForm.querySelector('button');
+        btn.setAttribute('aria-busy', 'true');
+        const formData = new FormData(qbitSettingsForm);
+        await fetch('/update_qbit_settings', { method: 'POST', body: formData });
+        btn.removeAttribute('aria-busy');
+    });
+
+    globalFiltersForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const btn = globalFiltersForm.querySelector('button');
+        btn.setAttribute('aria-busy', 'true');
+        const formData = new FormData(globalFiltersForm);
+        await fetch('/update_global_filters', { method: 'POST', body: formData });
+        initialConfig.filters.include = formData.get('include_keywords');
+        initialConfig.filters.exclude = formData.get('exclude_keywords');
+        btn.removeAttribute('aria-busy');
+    });
+
+    addFeedForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        addFeedBtn.setAttribute('aria-busy', 'true');
+        addFeedBtn.disabled = true;
+        const formData = new FormData(addFeedForm);
+        currentRssUrlToAdd = formData.get('rss_url');
+        try {
+            const response = await fetch('/api/preview_feed', { method: 'POST', body: formData });
+            const data = await response.json();
+            if (data.success) {
+                currentRssTitleToAdd = data.title;
+                showAddFeedModal();
+            } else {
+                alert(`预览失败: ${data.message}`);
+            }
+        } catch(e) {
+            alert('预览时发生网络错误');
+        } finally {
+            addFeedBtn.removeAttribute('aria-busy');
+            addFeedBtn.disabled = false;
+        }
+    });
+
+    document.getElementById('add-feed-confirm-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const btn = event.target.querySelector('button[type="submit"]');
+        btn.setAttribute('aria-busy', 'true');
+        const filters = {
+            include: document.getElementById('add-include').value,
+            exclude: document.getElementById('add-exclude').value,
+        };
+        const payload = { url: currentRssUrlToAdd, title: currentRssTitleToAdd, filters: filters };
+        const response = await fetch('/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (data.success) {
+            initialConfig = data.config;
+            renderFeeds(data.config.feeds);
+            addFeedForm.reset();
+        } else {
+            alert(`添加失败: ${data.message}`);
+        }
+        closeAddModal();
+        btn.removeAttribute('aria-busy');
+    });
+
+    proxyForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const btn = proxyForm.querySelector('button');
+        btn.setAttribute('aria-busy', 'true');
+        const formData = new FormData(proxyForm);
+        formData.append('https_proxy', formData.get('http_proxy'));
+        await fetch('/update_proxy', { method: 'POST', body: formData });
+        btn.removeAttribute('aria-busy');
+    });
+
+    runBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        if (logContainer.innerHTML.includes('等待任务开始')) { logContainer.innerHTML = ''; }
+        logContainer.innerHTML += '<span style="color: yellow;">▶ 任务已手动触发...</span><br>';
+        fetch('/run');
+    });
+
+    // 使用事件委托来处理所有删除按钮的点击
+    feedsContainer.addEventListener('click', (event) => {
+        const button = event.target.closest('.delete-btn');
+        if (button) {
+            const feedId = button.dataset.id;
+            const feedTitle = button.dataset.title;
+            confirmDelete(feedId, feedTitle);
+        }
+    });
+
+    // --- 删除确认逻辑 ---
+    const modalOverlay = document.getElementById('custom-modal-overlay');
+    const modalTitle = document.getElementById('modal-title');
+    const modalText = document.getElementById('modal-text');
+    const modalButtons = document.getElementById('modal-buttons');
+    let currentFeedId = null;
+    let currentFeedTitle = null;
+
+    modalOverlay.addEventListener('click', () => { closeModal(); });
+
+    function confirmDelete(feedId, feedTitle) {
+        currentFeedId = feedId;
+        currentFeedTitle = feedTitle;
+        showStep1(feedTitle);
+    }
+
+    function showStep1(feedTitle) {
+        modalTitle.innerText = '确认删除订阅';
+        modalText.innerText = `您确定要删除订阅 "${feedTitle}" 吗？`;
+        modalButtons.innerHTML = `<button class="secondary" onclick="closeModal()">取消</button><button onclick="showStep2('${feedTitle.replace(/'/g, "\\'")}')">下一步</button>`;
+        modalOverlay.style.display = 'flex';
+    }
+
+    function showStep2(feedTitle) {
+        modalTitle.innerText = '删除相关文件';
+        modalText.innerText = `要同时删除 qBittorrent 中所有已下载的 "${feedTitle}" 相关文件吗？`;
+        modalButtons.innerHTML = `<button class="secondary" onclick="closeModal()">取消操作</button><button class="outline" onclick="deleteFeed(false)">仅移除订阅</button><button class="contrast" onclick="deleteFeed(true)">全部删除</button>`;
+    }
+
+    async function deleteFeed(deleteFiles) {
+        if (currentFeedId === null) return;
+
+        modalText.innerText = '正在处理，请稍候...';
+        modalButtons.innerHTML = `<button aria-busy="true">删除中...</button>`;
+
+        const url = `/delete/${currentFeedId}?delete_files=${deleteFiles}`;
+
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.success) {
+                initialConfig = data.config;
+                renderFeeds(data.config.feeds);
+                closeModal();
+            } else {
+                alert(`删除失败: ${data.message}`);
+                showStep2(currentFeedTitle);
+            }
+        } catch (error) {
+            alert('删除时发生网络错误，请检查网络连接。');
+            showStep2(currentFeedTitle);
+        }
+    }
+
+    function closeModal() {
+        modalOverlay.style.display = 'none';
+    }
+
+    function showAddFeedModal() {
+        document.getElementById('add-modal-title').innerText = `为 "${currentRssTitleToAdd}" 添加订阅`;
+        document.getElementById('add-include').value = initialConfig.filters.include;
+        document.getElementById('add-exclude').value = initialConfig.filters.exclude;
+        addFeedModalOverlay.style.display = 'flex';
+    }
+    function closeAddModal() {
+        addFeedModalOverlay.style.display = 'none';
+    }
+    addFeedModalOverlay.addEventListener('click', closeAddModal);
+    document.querySelector('#add-feed-modal-overlay .modal-content button.secondary').addEventListener('click', closeAddModal);
+
+    // --- 侧边栏折叠逻辑 ---
+    const storageKey = 'sidebarCollapsed';
+    if (localStorage.getItem(storageKey) === 'true') {
+        body.classList.add('sidebar-collapsed');
+        sidebarToggle.textContent = '▶';
+    }
+    sidebarToggle.addEventListener('click', () => {
+        body.classList.toggle('sidebar-collapsed');
+        const isCollapsed = body.classList.contains('sidebar-collapsed');
+        sidebarToggle.textContent = isCollapsed ? '▶' : '◀';
+        localStorage.setItem(storageKey, isCollapsed);
+    });
+
+    // --- 日志流 ---
+    const eventSource = new EventSource('/log');
+    eventSource.onmessage = function(event) {
+        if (logContainer.innerHTML.includes('等待任务开始')) { logContainer.innerHTML = ''; }
+        logContainer.innerHTML += event.data + '<br>';
+        logContainer.scrollTop = logContainer.scrollHeight;
+    };
+    eventSource.onerror = function() {
+        logContainer.innerHTML += '<span style="color: red;">日志流连接断开，请刷新页面。</span><br>';
+        eventSource.close();
+    };
+</script>
+
+</body>
+</html>
