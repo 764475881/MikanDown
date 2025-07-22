@@ -5,3 +5,15 @@
     2.运行python main.py
     3.打开本地网页localhost:5000,填写qbit配置等,代理可不填,右上角添加rss源
 2.DOCKER安装
+    1.docker pull hertmoon/mikandown
+    2.docker-compose:
+      services:
+        qb-rss-web:
+          image: qb-rss-web
+          container_name: qb_rss_web1
+          ports:
+            - "5999:5000"
+          volumes:
+            - /volume3/docker/rss_mikan/data:/app/data
+          restart: unless-stopped
+    3.打开映射端口网页
