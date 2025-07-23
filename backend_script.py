@@ -54,7 +54,7 @@ def get_season_string(title: str) -> str | None:
     match = regex.search(title)
 
     if not match:
-        return None
+        return "Season 1"
 
     season_part = match.group(1) # 捕获到的季度部分，例如 "1" 或 "三"
 
@@ -138,7 +138,7 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger):
             qbit_category.replace(found[0], '')
             qbit_category = qbit_category.strip()
         # 构造唯一的保存路径
-        save_path = f"{download_path_base}{qbit_category}{session}/"
+        save_path = f"{download_path_base}{qbit_category}/{session}/"
 
         logger.info(f"--- 正在处理 Feed: {qbit_category} ---")
         if include_keywords or exclude_keywords:
