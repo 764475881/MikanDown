@@ -1,4 +1,5 @@
 # --- 1. 导入必要的库 ---
+import re
 
 import feedparser  # 用于解析 RSS 和 Atom fee
 # d
@@ -36,8 +37,42 @@ def save_history(history_list):
         # ensure_ascii=False 确保中文字符能被正确写入
         json.dump(history_list, f, indent=4, ensure_ascii=False)
 
-# --- 4. 核心处理函数 ---
 
+def get_season_string(title: str) -> str | None:
+    """
+    从一个标题字符串中提取季度信息，并返回 "Season X" 格式的字符串。
+    如果找不到匹配的季度，则返回 None。
+    """
+    # 定义中文数字到阿拉伯数字的映射
+    chinese_num_map = {
+        '一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
+        '六': 6, '七': 7, '八': 8, '九': 9, '十': 10
+    }
+
+    # 正则表达式，用于捕获季度数字（中文或阿拉伯数字）
+    regex = re.compile(r"第\s*([一二三四五六七八九十\d]+)\s*季")
+    match = regex.search(title)
+
+    if not match:
+        return None
+
+    season_part = match.group(1) # 捕获到的季度部分，例如 "1" 或 "三"
+
+    # 检查捕获到的部分是阿拉伯数字还是中文数字
+    if season_part.isdigit():
+        season_number = int(season_part)
+    else:
+        # 如果是中文，从映射字典中查找
+        season_number = chinese_num_map.get(season_part)
+
+    # 如果成功转换了数字，则格式化并返回字符串
+    if season_number is not None:
+        return f"Season {season_number}"
+    else:
+        # 如果中文数字不在我们的映射中（例如“十一”），则返回 Season 1
+        return "Season 1"
+
+# --- 4. 核心处理函数 ---
 def process_all_feeds(feed_objects, proxy_config, qbit_config, logger):
     """
     处理所有给定的 Feed 对象列表，检查更新并添加到 qBittorrent。
@@ -94,8 +129,16 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger):
 
         # 根据番剧标题和字幕组名称，构造在 qBittorrent 中唯一的分类名
         qbit_category = f"{feed_title}"
+
+        session = get_season_string(qbit_category)
+
+        regex = re.compile(r"(第\s*[一二三四五六七八九十\d]+\s*季)")
+        found  = regex.findall(qbit_category)
+        if found:
+            qbit_category.replace(found[0], '')
+            qbit_category = qbit_category.strip()
         # 构造唯一的保存路径
-        save_path = f"{download_path_base}{qbit_category}/"
+        save_path = f"{download_path_base}{qbit_category}{session}/"
 
         logger.info(f"--- 正在处理 Feed: {qbit_category} ---")
         if include_keywords or exclude_keywords:
@@ -162,11 +205,11 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger):
                         logger.info(f"发现新项目: {entry_title} -> [规则匹配成功]")
                         try:
                             # 调用 qBittorrent API 添加下载任务
-                            qbt_client.torrents_add(urls=torrent_url, category=qbit_category, save_path=save_path)
-                            logger.info(f"  -> ✅ 成功添加到 qBittorrent，分类为 '{qbit_category}'。")
+                            qbt_client.torrents_add(urls=torrent_url, category=feed_title, save_path=save_path)
+                            logger.info(f"  -> ✅ 成功添加到 qBittorrent，分类为 '{feed_title}'。")
 
                             # 创建新的历史记录对象，包含 URL 和唯一的分类名
-                            new_history_item = {"url": torrent_url, "title": qbit_category}
+                            new_history_item = {"url": torrent_url, "title": feed_title}
                             downloaded_history_list.append(new_history_item)
                             # 实时更新 URL 集合，防止在同一轮次中重复添加来自不同源的同一文件
                             known_urls.add(torrent_url)
