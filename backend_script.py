@@ -137,6 +137,7 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger):
         if found:
             qbit_category.replace(found[0], '')
             qbit_category = qbit_category.strip()
+            print(f"检测到为 {qbit_category} 的第 {session}")
         # 构造唯一的保存路径
         save_path = f"{download_path_base}{qbit_category}/{session}/"
 
@@ -192,7 +193,8 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger):
                     continue # 如果还是没有链接，则跳过此条目
 
                 # 检查这个种子链接是否已经存在于我们的历史记录中
-                if torrent_url not in known_urls:
+                # if torrent_url not in known_urls:
+                if True:
                     # --- 核心过滤逻辑 ---
                     # 1. 检查条目标题是否包含所有“必须包含”的关键词 (不区分大小写)
                     is_include_match = all(k.lower() in entry_title.lower() for k in include_keywords) if include_keywords else True
@@ -206,13 +208,14 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger):
                         try:
                             # 调用 qBittorrent API 添加下载任务
                             qbt_client.torrents_add(urls=torrent_url, category=feed_title, save_path=save_path)
-                            logger.info(f"  -> ✅ 成功添加到 qBittorrent，分类为 '{feed_title}'。")
+                            logger.info(f"  -> ✅ 成功添加到 qBittorrent，分类为 '{feed_title}'。路径为 '{save_path}'")
 
                             # 创建新的历史记录对象，包含 URL 和唯一的分类名
                             new_history_item = {"url": torrent_url, "title": feed_title}
                             downloaded_history_list.append(new_history_item)
                             # 实时更新 URL 集合，防止在同一轮次中重复添加来自不同源的同一文件
-                            known_urls.add(torrent_url)
+                            if torrent_url not in known_urls:
+                                known_urls.add(torrent_url)
 
                             new_downloads_this_run += 1
                         except Exception as e:
