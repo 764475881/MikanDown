@@ -133,9 +133,9 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger):
         session = get_season_string(qbit_category)
 
         regex = re.compile(r"(第\s*[一二三四五六七八九十\d]+\s*季)")
-        found  = regex.findall(qbit_category)
+        found = regex.search(qbit_category)
         if found:
-            qbit_category.replace(found[0], '')
+            qbit_category = qbit_category.replace(found[0], '')
             qbit_category = qbit_category.strip()
             print(f"检测到为 {qbit_category} 的第 {session}")
         # 构造唯一的保存路径
