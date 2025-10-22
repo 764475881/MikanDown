@@ -140,13 +140,13 @@ def add_feed():
 def delete_feed(feed_id):
     should_delete_files = request.args.get('delete_files', 'false').lower() == 'true'; config = load_config(); qbit_config = config.get('qbit', {})
     if 0 <= feed_id < len(config['feeds']):
-        feed_to_delete = config['feeds'].pop(feed_id); feed_title = feed_to_delete.get('title'); subgroup = feed_to_delete.get('subgroup', ''); qbit_category_to_delete = f"{feed_title}_{subgroup}" if subgroup else feed_title
+        feed_to_delete = config['feeds'].pop(feed_id); feed_title = feed_to_delete.get('title'); subgroup = feed_to_delete.get('subgroup', ''); qbit_category_to_delete = f"{feed_title}" if subgroup else feed_title
         
         # Replicate the category name modification from backend_script.py
-        regex1 = re.compile(r"(第\s*[一二三四五六七八九十\d]+\s*季)")
-        found1 = regex1.search(qbit_category_to_delete)
-        if found1:
-            qbit_category_to_delete = qbit_category_to_delete.replace(found1[0], '').strip()
+        # regex1 = re.compile(r"(第\s*[一二三四五六七八九十\d]+\s*季)")
+        # found1 = regex1.search(qbit_category_to_delete)
+        # if found1:
+        #     qbit_category_to_delete = qbit_category_to_delete.replace(found1[0], '').strip()
 
         # regex2 = re.compile(r"(第\s*[一二三四五六七八九十\d]+\s*部分)")
         # found2 = regex2.search(qbit_category_to_delete)

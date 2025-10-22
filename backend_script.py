@@ -221,7 +221,8 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger):
 
                             # 创建新的历史记录对象，包含 URL 和唯一的分类名
                             new_history_item = {"url": torrent_url, "title": qbit_category}
-                            downloaded_history_list.append(new_history_item)
+                            if new_history_item not in downloaded_history_list:
+                                downloaded_history_list.append(new_history_item)
                             # 实时更新 URL 集合，防止在同一轮次中重复添加来自不同源的同一文件
                             if torrent_url not in known_urls:
                                 known_urls.add(torrent_url)
