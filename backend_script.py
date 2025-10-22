@@ -128,7 +128,7 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger):
         exclude_keywords = [k for k in filters.get('exclude', '').split() if k]
 
         # 根据番剧标题和字幕组名称，构造在 qBittorrent 中唯一的分类名
-        qbit_category = f"{feed_title}"
+        qbit_category = f"{feed_title}_{subgroup}" if subgroup else feed_title
 
         session = get_season_string(qbit_category)
 
@@ -207,11 +207,11 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger):
                         logger.info(f"发现新项目: {entry_title} -> [规则匹配成功]")
                         try:
                             # 调用 qBittorrent API 添加下载任务
-                            qbt_client.torrents_add(urls=torrent_url, category=feed_title, save_path=save_path)
-                            logger.info(f"  -> ✅ 成功添加到 qBittorrent，分类为 '{feed_title}'。路径为 '{save_path}'")
+                            qbt_client.torrents_add(urls=torrent_url, category=qbit_category, save_path=save_path)
+                            logger.info(f"  -> ✅ 成功添加到 qBittorrent，分类为 '{qbit_category}'。路径为 '{save_path}'")
 
                             # 创建新的历史记录对象，包含 URL 和唯一的分类名
-                            new_history_item = {"url": torrent_url, "title": feed_title}
+                            new_history_item = {"url": torrent_url, "title": qbit_category}
                             downloaded_history_list.append(new_history_item)
                             # 实时更新 URL 集合，防止在同一轮次中重复添加来自不同源的同一文件
                             if torrent_url not in known_urls:
