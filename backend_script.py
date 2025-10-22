@@ -138,8 +138,17 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger):
             qbit_category = qbit_category.replace(found[0], '')
             qbit_category = qbit_category.strip()
             print(f"检测到为 {qbit_category} 的第 {session}")
-        # 构造唯一的保存路径
-        save_path = f"{download_path_base}{qbit_category}/{session}/"
+
+        regex2 = re.compile(r"(第\s*[一二三四五六七八九十\d]+\s*部分)")
+        found2 = regex2.search(qbit_category)
+        if found2:
+            qbit_category2 = qbit_category.replace(found2[0], '')
+            qbit_category2 = qbit_category2.strip()
+            print(f"检测到为 {qbit_category2} 的第 {session}")
+            # 构造唯一的保存路径
+            save_path = f"{download_path_base}{qbit_category2}/{session}/"
+        else:
+            save_path = f"{download_path_base}{qbit_category}/{session}/"
 
         logger.info(f"--- 正在处理 Feed: {qbit_category} ---")
         if include_keywords or exclude_keywords:
