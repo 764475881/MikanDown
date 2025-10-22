@@ -127,8 +127,8 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger):
         include_keywords = [k for k in filters.get('include', '').split() if k]
         exclude_keywords = [k for k in filters.get('exclude', '').split() if k]
 
-        # 根据番剧标题和字幕组名称，构造在 qBittorrent 中唯一的分类名
-        qbit_category = f"{feed_title}_{subgroup}" if subgroup else feed_title
+        # 根据番剧标题，构造在 qBittorrent 中唯一的分类名
+        qbit_category = f"{feed_title}"
 
         session = get_season_string(qbit_category)
 
