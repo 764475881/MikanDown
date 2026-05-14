@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 from flask import Flask, Response, render_template, request, jsonify, session, redirect, url_for, flash
 from flask_apscheduler import APScheduler
 
-from backend_script import (process_all_feeds, load_history, save_history)
+from backend_script import (process_all_feeds, load_history, save_history, clean_category_name)
 from curl_cffi import requests as cffi_requests
 import feedparser
 from qbittorrentapi import Client
@@ -140,18 +140,10 @@ def add_feed():
 def delete_feed(feed_id):
     should_delete_files = request.args.get('delete_files', 'false').lower() == 'true'; config = load_config(); qbit_config = config.get('qbit', {})
     if 0 <= feed_id < len(config['feeds']):
-        feed_to_delete = config['feeds'].pop(feed_id); feed_title = feed_to_delete.get('title'); subgroup = feed_to_delete.get('subgroup', ''); qbit_category_to_delete = f"{feed_title}" if subgroup else feed_title
-        
-        # Replicate the category name modification from backend_script.py
-        # regex1 = re.compile(r"(第\s*[一二三四五六七八九十\d]+\s*季)")
-        # found1 = regex1.search(qbit_category_to_delete)
-        # if found1:
-        #     qbit_category_to_delete = qbit_category_to_delete.replace(found1[0], '').strip()
-
-        # regex2 = re.compile(r"(第\s*[一二三四五六七八九十\d]+\s*部分)")
-        # found2 = regex2.search(qbit_category_to_delete)
-        # if found2:
-        #     qbit_category_to_delete = qbit_category_to_delete.replace(found2[0], '').strip()
+        feed_to_delete = config['feeds'].pop(feed_id)
+        feed_title = feed_to_delete.get('title', '')
+        # 使用与 backend_script 相同的分类名清洗逻辑
+        qbit_category_to_delete, _ = clean_category_name(feed_title)
 
         if should_delete_files and qbit_category_to_delete:
             try:

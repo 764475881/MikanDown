@@ -1,13 +1,13 @@
 # --- 1. 导入必要的库 ---
 import re
 
-import feedparser  # 用于解析 RSS 和 Atom fee
-# d
+import feedparser  # 用于解析 RSS 和 Atom Feed
 import json  # 用于处理 JSON 数据 (历史记录文件)
 import time  # 用于在循环中添加延迟
 from qbittorrentapi import Client  # qBittorrent 的 API 客户端库
 from curl_cffi import requests as cffi_requests  # 模拟浏览器的网络请求库，用于绕过网站防火墙
 import os
+from notifier import send_notification
 # --- 2. 全局常量 ---
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -16,7 +16,6 @@ DATA_DIR = os.path.join(BASE_DIR, 'data')
 HISTORY_FILE = os.path.join(DATA_DIR, 'downloaded_history.json')
 
 # --- 3. 辅助函数 (读写历史记录) ---
-print(HISTORY_FILE)
 def load_history():
     """从 data/downloaded_history.json 文件加载历史记录对象列表。"""
     try:
@@ -72,8 +71,38 @@ def get_season_string(title: str) -> str | None:
         # 如果中文数字不在我们的映射中（例如“十一”），则返回 Season 1
         return "Season 1"
 
+def clean_category_name(title: str) -> tuple[str, str]:
+    """从番剧标题中分离季度/部分信息，返回 (干净的分类名, 季度标识)。
+
+    例如:
+      "进击的巨人 第三季"         → ("进击的巨人", "Season 3")
+      "鬼灭之刃 第二季 游郭篇"    → ("鬼灭之刃 游郭篇", "Season 2")
+      "咒术回战"                   → ("咒术回战", "Season 1")
+    """
+    regex_season = re.compile(r"(第\s*[一二三四五六七八九十\d]+\s*季)")
+    regex_part = re.compile(r"(第\s*[一二三四五六七八九十\d]+\s*部分)")
+
+    session = get_season_string(title)
+    category = title
+
+    found_season = regex_season.search(category)
+    if found_season:
+        category = category.replace(found_season[0], '').strip()
+
+    found_part = regex_part.search(category)
+    if found_part:
+        category = category.replace(found_part[0], '').strip()
+
+    return category, session
+
+
+def extract_save_path(download_path_base: str, category: str, session: str) -> str:
+    """构造 qBittorrent 保存路径。"""
+    return f"{download_path_base}{category}/{session}/"
+
+
 # --- 4. 核心处理函数 ---
-def process_all_feeds(feed_objects, proxy_config, qbit_config, logger):
+def process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notify_config=None):
     """
     处理所有给定的 Feed 对象列表，检查更新并添加到 qBittorrent。
     这个函数是整个后台下载逻辑的核心，被主应用 `main.py` 在手动或定时任务中调用。
@@ -127,28 +156,10 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger):
         include_keywords = [k for k in filters.get('include', '').split() if k]
         exclude_keywords = [k for k in filters.get('exclude', '').split() if k]
 
-        # 根据番剧标题，构造在 qBittorrent 中唯一的分类名
-        qbit_category = f"{feed_title}"
-
-        session = get_season_string(qbit_category)
-
-        regex = re.compile(r"(第\s*[一二三四五六七八九十\d]+\s*季)")
-        found = regex.search(qbit_category)
-        if found:
-            qbit_category = qbit_category.replace(found[0], '')
-            qbit_category = qbit_category.strip()
-            print(f"检测到为 {qbit_category} 的第 {session}")
-
-        regex2 = re.compile(r"(第\s*[一二三四五六七八九十\d]+\s*部分)")
-        found2 = regex2.search(qbit_category)
-        if found2:
-            qbit_category2 = qbit_category.replace(found2[0], '')
-            qbit_category2 = qbit_category2.strip()
-            print(f"检测到为 {qbit_category2} 的第 {session}")
-            # 构造唯一的保存路径
-            save_path = f"{download_path_base}{qbit_category2}/{session}/"
-        else:
-            save_path = f"{download_path_base}{qbit_category}/{session}/"
+        # 使用共享函数清洗分类名
+        qbit_category, session = clean_category_name(feed_title)
+        save_path = extract_save_path(download_path_base, qbit_category, session)
+        logger.info(f"分类名: '{qbit_category}' | 保存路径: '{save_path}'")
 
         logger.info(f"--- 正在处理 Feed: {qbit_category} ---")
         if include_keywords or exclude_keywords:
@@ -228,6 +239,18 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger):
                                 known_urls.add(torrent_url)
 
                             new_downloads_this_run += 1
+
+                            # --- 发送通知 ---
+                            if notify_config and notify_config.get('enabled', False):
+                                feed_title = feed_item.get('title', '未知番组')
+                                notify_title = f"📥 下载完成: {feed_title}"
+                                notify_message = (
+                                    f"**番组:** {feed_title}\n"
+                                    f"**集数:** {entry_title}\n"
+                                    f"**分类:** {qbit_category}\n"
+                                    f"**保存路径:** {save_path}"
+                                )
+                                send_notification(notify_title, notify_message, notify_config, logger)
                         except Exception as e:
                             logger.error(f"  -> ❌ 添加到 qBittorrent 失败: {e}")
         except Exception as e:
