@@ -9,6 +9,7 @@ import shutil
 import time as time_module
 import hashlib
 from functools import wraps
+import xml.etree.ElementTree as ET
 
 from bs4 import BeautifulSoup
 from flask import Flask, Response, render_template, request, jsonify, session, redirect, url_for, flash
@@ -226,6 +227,65 @@ def api_status():
     except Exception:
         pass
     return jsonify({"feed_count": feed_count, "downloaded_total": downloaded_total, "active_torrents": active_torrents, "last_update": last_update_time, "disk_usage": disk_usage})
+
+@app.route('/api/feeds/export')
+@login_required
+def export_opml():
+    config = load_config()
+    opml = ET.Element('opml', version='2.0')
+    head = ET.SubElement(opml, 'head')
+    title = ET.SubElement(head, 'title')
+    title.text = 'MikanDown 订阅列表'
+    body = ET.SubElement(opml, 'body')
+    for feed in config.get('feeds', []):
+        outline = ET.SubElement(body, 'outline')
+        outline.set('text', feed.get('title', ''))
+        outline.set('type', 'rss')
+        outline.set('xmlUrl', feed.get('url', ''))
+        outline.set('htmlUrl', '')
+        filters = feed.get('filters', {})
+        if filters.get('include'):
+            outline.set('mikan_include_filter', filters['include'])
+        if filters.get('exclude'):
+            outline.set('mikan_exclude_filter', filters['exclude'])
+    xml_str = '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(opml, encoding='unicode')
+    return Response(xml_str, mimetype='text/xml', headers={'Content-Disposition': 'attachment; filename=mikandown_subscriptions.opml'})
+
+@app.route('/api/feeds/import', methods=['POST'])
+@login_required
+def import_opml():
+    if 'file' not in request.files:
+        return jsonify({"success": False, "message": "请上传文件"}), 400
+    file = request.files['file']
+    if not file.filename.endswith('.opml') and not file.filename.endswith('.xml'):
+        return jsonify({"success": False, "message": "请上传 OPML/XML 文件"}), 400
+    try:
+        tree = ET.parse(file)
+        root = tree.getroot()
+        config = load_config()
+        imported_count = 0
+        for outline in root.iter('outline'):
+            xml_url = outline.get('xmlUrl')
+            if not xml_url:
+                continue
+            if any(feed['url'] == xml_url for feed in config['feeds']):
+                continue
+            new_feed = {
+                "url": xml_url,
+                "title": outline.get('text', ''),
+                "cover_url": "",
+                "filters": {
+                    "include": outline.get('mikan_include_filter', ''),
+                    "exclude": outline.get('mikan_exclude_filter', '')
+                },
+                "subgroup": ""
+            }
+            config['feeds'].append(new_feed)
+            imported_count += 1
+        save_config(config)
+        return jsonify({"success": True, "imported": imported_count, "total": len(config['feeds'])})
+    except ET.ParseError as e:
+        return jsonify({"success": False, "message": f"OPML 解析失败: {e}"}), 400
 
 @app.route('/log')
 @login_required
