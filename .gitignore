@@ -1,5 +1,6 @@
 # Python
 __pycache__/
+.superpowers/
 *.py[cod]
 *$py.class
 *.so
