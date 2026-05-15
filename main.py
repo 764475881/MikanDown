@@ -5,6 +5,8 @@ import threading
 import time
 from urllib.parse import urlparse, parse_qs
 import os
+import shutil
+import time as time_module
 import hashlib
 from functools import wraps
 
@@ -26,6 +28,7 @@ DATA_DIR = os.path.join(BASE_DIR, 'data')
 os.makedirs(DATA_DIR, exist_ok=True)
 CONFIG_FILE = os.path.join(DATA_DIR, 'config.json')
 LOG_FILE = os.path.join(DATA_DIR, 'script.log')
+last_update_time = None
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8'), logging.StreamHandler()])
 logger = logging.getLogger(__name__)
 
@@ -179,6 +182,32 @@ def update_qbit_settings():
 def run_script():
     config = load_config(); thread = threading.Thread(target=process_all_feeds, args=(config['feeds'], config['proxy'], config.get('qbit',{}), logger)); thread.start()
     return jsonify({"success": True, "message": "任务已在后台启动"})
+
+@app.route('/api/status')
+@login_required
+def api_status():
+    config = load_config()
+    feed_count = len(config.get('feeds', []))
+    history_list = load_history()
+    downloaded_total = len(history_list)
+    active_torrents = 0
+    disk_usage = None
+    try:
+        qbit_config = config.get('qbit', {})
+        if qbit_config.get('host'):
+            qbt_client = Client(host=qbit_config.get('host'), port=qbit_config.get('port'), username=qbit_config.get('username'), password=qbit_config.get('password'))
+            qbt_client.auth_log_in()
+            all_torrents = qbt_client.torrents_info()
+            active_torrents = len([t for t in all_torrents if t.state in ('downloading', 'queuedDL', 'stalledDL')])
+    except Exception:
+        active_torrents = -1
+    try:
+        disk_total, disk_used, disk_free = shutil.disk_usage(DATA_DIR)
+        disk_usage = {"total": round(disk_total / (1024**3), 1), "used": round(disk_used / (1024**3), 1), "free": round(disk_free / (1024**3), 1), "unit": "GB"}
+    except Exception:
+        pass
+    return jsonify({"feed_count": feed_count, "downloaded_total": downloaded_total, "active_torrents": active_torrents, "last_update": last_update_time, "disk_usage": disk_usage})
+
 @app.route('/log')
 @login_required
 def stream_log():
@@ -193,6 +222,7 @@ def stream_log():
 scheduler = APScheduler()
 @scheduler.task('interval', id='rss_check_job', minutes=30, misfire_grace_time=900)
 def scheduled_task():
+    global last_update_time; last_update_time = time_module.strftime('%Y-%m-%dT%H:%M:%S')
     with app.app_context():
         logger.info("--- [APScheduler] 定时任务已启动 ---")
         config = load_config()
