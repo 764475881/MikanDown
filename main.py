@@ -48,7 +48,7 @@ def check_for_setup():
     qbit_is_set = config.get('qbit') and config['qbit'].get('host')
     has_feeds = len(config.get('feeds', [])) > 0
     wizard_complete = password_is_set and qbit_is_set and has_feeds
-    if not wizard_complete and request.endpoint not in ['wizard', 'setup', 'static', 'login', 'api_test_qbit', 'api_preview_feed', 'api_status']:
+    if not wizard_complete and request.endpoint not in ['wizard', 'setup', 'static', 'login', 'api_test_qbit', 'preview_feed', 'api_status', 'update_qbit_settings', 'add_feed', 'update_global_filters', 'update_proxy', 'delete_feed']:
         return redirect(url_for('wizard'))
     if wizard_complete and request.endpoint == 'wizard':
         return redirect(url_for('index'))
@@ -194,7 +194,7 @@ def api_test_qbit():
     try:
         qbt_client = Client(host=data.get('host'), port=data.get('port'), username=data.get('username'), password=data.get('password'), VERIFY_WEBUI_CERTIFICATE=False, REQUESTS_ARGS={'timeout': (10, 30)})
         qbt_client.auth_log_in()
-        version = qbt_client.app.version()
+        version = qbt_client.app.version
         return jsonify({"success": True, "version": version})
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})
