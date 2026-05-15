@@ -44,10 +44,13 @@ def save_config(config):
 def check_for_setup():
     config = load_config()
     password_is_set = config.get('auth') and config['auth'].get('password_hash')
-    if not password_is_set and request.endpoint not in ['setup', 'static']:
-        return redirect(url_for('setup'))
-    if password_is_set and request.endpoint == 'setup':
-        return redirect(url_for('login'))
+    qbit_is_set = config.get('qbit') and config['qbit'].get('host')
+    has_feeds = len(config.get('feeds', [])) > 0
+    wizard_complete = password_is_set and qbit_is_set and has_feeds
+    if not wizard_complete and request.endpoint not in ['wizard', 'setup', 'static', 'login', 'api_test_qbit', 'api_preview_feed']:
+        return redirect(url_for('wizard'))
+    if wizard_complete and request.endpoint == 'wizard':
+        return redirect(url_for('index'))
 
 def login_required(f):
     @wraps(f)
@@ -77,6 +80,10 @@ def setup():
         flash('管理员账户创建成功！现在请登录。')
         return redirect(url_for('login'))
     return render_template('setup.html')
+
+@app.route('/wizard', methods=['GET'])
+def wizard():
+    return render_template('wizard.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -177,6 +184,18 @@ def update_qbit_settings():
     if 'qbit' not in config: config['qbit'] = {}
     config['qbit']['host'] = request.form.get('qbit_host'); config['qbit']['port'] = request.form.get('qbit_port'); config['qbit']['username'] = request.form.get('qbit_username'); config['qbit']['password'] = request.form.get('qbit_password'); config['qbit']['save_path_base'] = request.form.get('qbit_save_path'); save_config(config)
     return jsonify({"success": True})
+
+@app.route('/api/test_qbit', methods=['POST'])
+@login_required
+def api_test_qbit():
+    data = request.json
+    try:
+        qbt_client = Client(host=data.get('host'), port=data.get('port'), username=data.get('username'), password=data.get('password'))
+        qbt_client.auth_log_in()
+        version = qbt_client.app.version()
+        return jsonify({"success": True, "version": version})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
 @app.route('/run')
 @login_required
 def run_script():

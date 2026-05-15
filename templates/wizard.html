@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <title>设置向导 - MikanDown</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+  <style>
+    main { display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    article { width: 100%; max-width: 520px; }
+    .step-indicator { display: flex; justify-content: center; gap: 0.5rem; margin-bottom: 1.5rem; }
+    .step-dot { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; background: var(--card-background-color); color: var(--muted-color); }
+    .step-dot.active { background: var(--primary); color: var(--primary-inverse); }
+    .step-dot.done { background: var(--primary-focus); color: var(--primary); }
+    .step-line { width: 40px; height: 2px; align-self: center; background: var(--card-background-color); }
+    .step-line.done { background: var(--primary-focus); }
+    .step-content { display: none; }
+    .step-content.active { display: block; }
+    .btn-group { display: flex; justify-content: space-between; margin-top: 1rem; }
+    .result-msg { margin-top: 0.5rem; font-size: 0.85rem; }
+    .result-msg.success { color: var(--form-element-valid-border-color); }
+    .result-msg.error { color: var(--del-color); }
+  </style>
+</head>
+<body>
+<main class="container">
+  <article>
+    <hgroup>
+      <h1>欢迎使用 MikanDown 🎉</h1>
+      <h2>几步完成初始设置</h2>
+    </hgroup>
+
+    <div class="step-indicator">
+      <div class="step-dot active" id="sd-1">1</div><div class="step-line" id="sl-1"></div>
+      <div class="step-dot" id="sd-2">2</div><div class="step-line" id="sl-2"></div>
+      <div class="step-dot" id="sd-3">3</div>
+    </div>
+
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    <p style="color: var(--del-color);">{{ messages[0] }}</p>
+    {% endif %}
+    {% endwith %}
+
+    <!-- Step 1: 设置密码 -->
+    <div class="step-content active" id="step-1">
+      <h3>设置管理员账户</h3>
+      <p>创建你的管理员用户名和密码。</p>
+      <form id="form-step1" method="post" action="{{ url_for('setup') }}">
+        <input type="text" name="username" placeholder="管理员用户名" required>
+        <input type="password" name="password" placeholder="设置密码" required>
+        <input type="password" name="password_confirm" placeholder="确认密码" required>
+        <div class="btn-group">
+          <span></span>
+          <button type="submit">下一步</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Step 2: 配置 qBittorrent -->
+    <div class="step-content" id="step-2">
+      <h3>连接 qBittorrent</h3>
+      <p>填入 qBittorrent Web UI 的连接信息。</p>
+      <form id="form-step2">
+        <input type="text" id="qbit_host" placeholder="qBittorrent 地址 (如 192.168.1.100)" required>
+        <input type="text" id="qbit_port" placeholder="端口 (默认 8080)" value="8080" required>
+        <input type="text" id="qbit_user" placeholder="用户名 (默认 admin)" value="admin">
+        <input type="password" id="qbit_pass" placeholder="密码">
+        <input type="text" id="qbit_path" placeholder="保存路径 (如 /downloads/)" value="/downloads/">
+        <div id="qbit-result" class="result-msg"></div>
+        <div class="btn-group">
+          <button type="button" class="secondary" onclick="goStep(1)">上一步</button>
+          <button type="submit">测试连接并继续</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Step 3: 添加订阅 -->
+    <div class="step-content" id="step-3">
+      <h3>添加你的第一个订阅</h3>
+      <p>输入 Mikan Project 的 RSS 订阅链接。</p>
+      <form id="form-step3">
+        <input type="url" id="rss_url" placeholder="RSS URL (右键 MikanProject 复制链接地址)" required>
+        <div id="rss-result" class="result-msg"></div>
+        <div class="btn-group">
+          <button type="button" class="secondary" onclick="goStep(2)">上一步</button>
+          <button type="submit">测试并完成</button>
+        </div>
+      </form>
+    </div>
+
+    <p id="wizard-done" style="display:none; text-align:center; color: var(--form-element-valid-border-color);">✅ 设置完成！<a href="{{ url_for('index') }}">进入主界面</a></p>
+  </article>
+</main>
+
+<script>
+let currentStep = 1;
+function goStep(n) {
+  document.querySelectorAll('.step-content').forEach(el => el.classList.remove('active'));
+  document.getElementById('step-' + n).classList.add('active');
+  document.querySelectorAll('.step-dot').forEach(el => el.classList.remove('active'));
+  document.getElementById('sd-' + n).classList.add('active');
+  document.querySelectorAll('.step-line').forEach(el => el.classList.remove('done'));
+  for (let i = 1; i < n; i++) {
+    document.getElementById('sd-' + i).classList.add('done');
+    document.getElementById('sd-' + i).classList.remove('active');
+    document.getElementById('sl-' + i).classList.add('done');
+  }
+  currentStep = n;
+}
+
+document.getElementById('form-step1')?.addEventListener('submit', function(e) {
+  // 让表单正常提交到 /setup
+});
+
+document.getElementById('form-step2')?.addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = this.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = '测试中...';
+  const res = await fetch('/api/test_qbit', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+    host: document.getElementById('qbit_host').value,
+    port: document.getElementById('qbit_port').value,
+    username: document.getElementById('qbit_user').value,
+    password: document.getElementById('qbit_pass').value
+  })});
+  const data = await res.json();
+  const resultEl = document.getElementById('qbit-result');
+  if (data.success) {
+    const saveRes = await fetch('/update_qbit_settings', {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams({
+      qbit_host: document.getElementById('qbit_host').value,
+      qbit_port: document.getElementById('qbit_port').value,
+      qbit_username: document.getElementById('qbit_user').value,
+      qbit_password: document.getElementById('qbit_pass').value,
+      qbit_save_path: document.getElementById('qbit_path').value
+    })});
+    const saveData = await saveRes.json();
+    if (saveData.success) {
+      resultEl.className = 'result-msg success'; resultEl.textContent = '✅ 连接成功 (v' + data.version + ')，已保存配置';
+      setTimeout(() => goStep(3), 800);
+    }
+  } else {
+    resultEl.className = 'result-msg error'; resultEl.textContent = '❌ ' + (data.message || '连接失败');
+  }
+  btn.disabled = false; btn.textContent = '测试连接并继续';
+});
+
+document.getElementById('form-step3')?.addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = this.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = '验证中...';
+  const formData = new FormData(); formData.append('rss_url', document.getElementById('rss_url').value);
+  const res = await fetch('/api/preview_feed', {method:'POST', body: formData});
+  const data = await res.json();
+  const resultEl = document.getElementById('rss-result');
+  if (data.success) {
+    const addRes = await fetch('/add', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      url: document.getElementById('rss_url').value,
+      title: data.title,
+      filters: {include: '', exclude: ''}
+    })});
+    const addData = await addRes.json();
+    if (addData.success) {
+      resultEl.className = 'result-msg success';
+      resultEl.textContent = '✅ 已添加: ' + data.title;
+      document.getElementById('form-step3').style.display = 'none';
+      document.getElementById('wizard-done').style.display = 'block';
+    } else {
+      resultEl.className = 'result-msg error'; resultEl.textContent = '❌ ' + (addData.message || '添加失败');
+    }
+  } else {
+    resultEl.className = 'result-msg error'; resultEl.textContent = '❌ ' + (data.message || '验证失败');
+  }
+  btn.disabled = false; btn.textContent = '测试并完成';
+});
+</script>
+</body>
+</html>
