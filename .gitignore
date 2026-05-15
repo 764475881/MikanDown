@@ -6,6 +6,7 @@ __pycache__/
 .Python
 env/
 venv/
+.venv/
 ENV/
 build/
 develop-eggs/
@@ -46,3 +47,9 @@ temp/
 
 # Worktrees
 .worktrees/
+
+# Internal docs (not for public repo)
+docs/
+
+# requirements.txt replaced by pyproject.toml
+requirements.txt

@@ -2,15 +2,18 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
 # Install system deps for curl_cffi compilation
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Cache pip deps
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install deps via uv
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
 
 # Copy app
 COPY . .
