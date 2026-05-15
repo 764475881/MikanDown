@@ -78,6 +78,14 @@
         <a href="#" id="run-btn" role="button" class="contrast" style="width: 100%;">立即运行检查</a>
     </section>
     <section class="control-section">
+        <h2>订阅备份</h2>
+        <div style="display:flex; gap:0.5rem;">
+            <button class="secondary" style="flex:1; font-size:0.8rem;" onclick="document.getElementById('opml-file-input').click()">📥 导入 OPML</button>
+            <a href="/api/feeds/export" class="secondary" style="flex:1; font-size:0.8rem; text-align:center; padding:0.5rem; border-radius:var(--border-radius); border:1px solid var(--form-element-border-color); text-decoration:none;">📤 导出 OPML</a>
+        </div>
+        <input type="file" id="opml-file-input" accept=".opml,.xml" style="display:none;" onchange="importOPML(this)">
+    </section>
+    <section class="control-section">
         <a href="/logout" role="button" class="secondary" style="width: 100%;">登出</a>
     </section>
     <section class="control-section">
@@ -379,6 +387,28 @@
         logContainer.innerHTML += '<span style="color: red;">日志流连接断开，请刷新页面。</span><br>';
         eventSource.close();
     };
+
+    async function importOPML(input) {
+      if (!input.files.length) return;
+      const formData = new FormData();
+      formData.append('file', input.files[0]);
+      const btn = input.previousElementSibling.querySelector('button') || document.querySelector('button[onclick*="opml-file-input"]');
+      if (btn) { btn.textContent = '导入中...'; btn.disabled = true; }
+      try {
+        const res = await fetch('/api/feeds/import', {method:'POST', body: formData});
+        const data = await res.json();
+        if (data.success) {
+          alert('✅ 成功导入 ' + data.imported + ' 个订阅（共 ' + data.total + ' 个）');
+          location.reload();
+        } else {
+          alert('❌ 导入失败: ' + (data.message || '未知错误'));
+        }
+      } catch(e) {
+        alert('❌ 导入失败: ' + e.message);
+      }
+      if (btn) { btn.textContent = '📥 导入 OPML'; btn.disabled = false; }
+      input.value = '';
+    }
 </script>
 
 </body>
