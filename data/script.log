@@ -68,3 +68,21 @@
 2026-05-15 14:57:34,716 - INFO - 127.0.0.1 - - [15/May/2026 14:57:34] "GET /api/status HTTP/1.1" 200 -
 2026-05-15 14:57:34,732 - INFO - 127.0.0.1 - - [15/May/2026 14:57:34] "[32mGET /favicon.ico HTTP/1.1[0m" 302 -
 2026-05-15 14:57:34,738 - INFO - 127.0.0.1 - - [15/May/2026 14:57:34] "GET /wizard HTTP/1.1" 200 -
+2026-05-15 15:10:53,338 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-15 15:10:53,340 - INFO - Added job "scheduled_task" to job store "default"
+2026-05-15 15:10:53,340 - INFO - Scheduler started
+2026-05-15 15:10:53,342 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.205.191.12:5000
+2026-05-15 15:10:53,342 - INFO - [33mPress CTRL+C to quit[0m
+2026-05-15 15:11:12,249 - INFO - 127.0.0.1 - - [15/May/2026 15:11:12] "GET /wizard HTTP/1.1" 200 -
+2026-05-15 15:11:13,565 - INFO - 127.0.0.1 - - [15/May/2026 15:11:13] "GET /api/status HTTP/1.1" 200 -
+2026-05-15 15:11:13,935 - INFO - 127.0.0.1 - - [15/May/2026 15:11:13] "[32mGET /favicon.ico HTTP/1.1[0m" 302 -
+2026-05-15 15:11:14,315 - INFO - 127.0.0.1 - - [15/May/2026 15:11:14] "GET /wizard HTTP/1.1" 200 -
+2026-05-15 15:11:37,937 - INFO - 127.0.0.1 - - [15/May/2026 15:11:37] "POST /api/test_qbit HTTP/1.1" 200 -
+2026-05-15 15:11:37,941 - INFO - 127.0.0.1 - - [15/May/2026 15:11:37] "POST /update_qbit_settings HTTP/1.1" 200 -
+2026-05-15 15:11:45,792 - INFO - 127.0.0.1 - - [15/May/2026 15:11:45] "GET / HTTP/1.1" 200 -
+2026-05-15 15:11:46,186 - INFO - 127.0.0.1 - - [15/May/2026 15:11:46] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2026-05-15 15:11:46,664 - INFO - 127.0.0.1 - - [15/May/2026 15:11:46] "GET /log HTTP/1.1" 200 -
+2026-05-15 15:11:48,707 - INFO - 127.0.0.1 - - [15/May/2026 15:11:48] "GET /api/status HTTP/1.1" 200 -

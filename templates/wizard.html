@@ -77,13 +77,14 @@
 
     <!-- Step 3: 添加订阅 -->
     <div class="step-content" id="step-3">
-      <h3>添加你的第一个订阅</h3>
-      <p>输入 Mikan Project 的 RSS 订阅链接。</p>
+      <h3>添加你的第一个订阅（可选）</h3>
+      <p>输入 Mikan Project 的 RSS 订阅链接，或跳过稍后添加。</p>
       <form id="form-step3">
-        <input type="url" id="rss_url" placeholder="RSS URL (右键 MikanProject 复制链接地址)" required>
+        <input type="url" id="rss_url" placeholder="RSS URL (右键 MikanProject 复制链接地址)">
         <div id="rss-result" class="result-msg"></div>
         <div class="btn-group">
           <button type="button" class="secondary" onclick="goStep(2)">上一步</button>
+          <button type="button" class="secondary" id="skip-step3" onclick="window.location.href='/'">跳过</button>
           <button type="submit">测试并完成</button>
         </div>
       </form>
@@ -113,14 +114,12 @@ function goStep(n) {
 (async function initWizard() {
   const res = await fetch('/api/status');
   const data = await res.json();
-  if (data.auth_set && data.qbit_set && data.feed_count > 0) {
-    // 全部完成，跳转到首页
+  if (data.auth_set && data.qbit_set) {
+    // 全部完成（订阅可选，因为在主界面添加），跳转到首页
     window.location.href = '/';
     return;
   }
-  if (data.auth_set && data.qbit_set) {
-    goStep(3); // qbit 和 auth 都设了，跳到步骤 3
-  } else if (data.auth_set) {
+  if (data.auth_set) {
     goStep(2); // auth 设了但 qbit 没设，跳到步骤 2
   }
   // 否则留在步骤 1

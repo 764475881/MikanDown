@@ -47,7 +47,8 @@ def check_for_setup():
     password_is_set = config.get('auth') and config['auth'].get('password_hash')
     qbit_is_set = config.get('qbit') and config['qbit'].get('host')
     has_feeds = len(config.get('feeds', [])) > 0
-    wizard_complete = password_is_set and qbit_is_set and has_feeds
+    # 如果 auth 和 qbit 都设置了，向导即可视为完成；订阅可稍后添加
+    wizard_complete = password_is_set and qbit_is_set
     if not wizard_complete and request.endpoint not in ['wizard', 'setup', 'static', 'login', 'api_test_qbit', 'preview_feed', 'api_status', 'update_qbit_settings', 'add_feed', 'update_global_filters', 'update_proxy', 'delete_feed']:
         return redirect(url_for('wizard'))
     if wizard_complete and request.endpoint == 'wizard':
