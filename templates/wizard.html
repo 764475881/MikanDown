@@ -109,6 +109,23 @@ function goStep(n) {
   currentStep = n;
 }
 
+// 页面加载时检测已完成的步骤，自动跳转到未完成的步骤
+(async function initWizard() {
+  const res = await fetch('/api/status');
+  const data = await res.json();
+  if (data.auth_set && data.qbit_set && data.feed_count > 0) {
+    // 全部完成，跳转到首页
+    window.location.href = '/';
+    return;
+  }
+  if (data.auth_set && data.qbit_set) {
+    goStep(3); // qbit 和 auth 都设了，跳到步骤 3
+  } else if (data.auth_set) {
+    goStep(2); // auth 设了但 qbit 没设，跳到步骤 2
+  }
+  // 否则留在步骤 1
+})();
+
 document.getElementById('form-step1')?.addEventListener('submit', function(e) {
   // 让表单正常提交到 /setup
 });

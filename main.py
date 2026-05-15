@@ -78,8 +78,9 @@ def setup():
         config = load_config()
         config['auth'] = { 'username': username, 'salt': salt.hex(), 'password_hash': password_hash.hex() }
         save_config(config)
-        flash('管理员账户创建成功！现在请登录。')
-        return redirect(url_for('login'))
+        flash('管理员账户创建成功！')
+        session['logged_in'] = True
+        return redirect(url_for('wizard'))
     return render_template('setup.html')
 
 @app.route('/wizard', methods=['GET'])
@@ -225,7 +226,7 @@ def api_status():
         disk_usage = {"total": round(disk_total / (1024**3), 1), "used": round(disk_used / (1024**3), 1), "free": round(disk_free / (1024**3), 1), "unit": "GB"}
     except Exception:
         pass
-    return jsonify({"feed_count": feed_count, "downloaded_total": downloaded_total, "active_torrents": active_torrents, "last_update": last_update_time, "disk_usage": disk_usage})
+    return jsonify({"feed_count": feed_count, "downloaded_total": downloaded_total, "active_torrents": active_torrents, "last_update": last_update_time, "disk_usage": disk_usage, "auth_set": bool(config.get('auth') and config['auth'].get('password_hash')), "qbit_set": bool(config.get('qbit') and config['qbit'].get('host'))})
 
 @app.route('/api/feeds/export')
 @login_required

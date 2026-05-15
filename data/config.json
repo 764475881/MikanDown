@@ -1,0 +1,11 @@
+{
+    "feeds": [],
+    "proxy": {},
+    "filters": {},
+    "qbit": {},
+    "auth": {
+        "username": "admin",
+        "salt": "6faed3361fa834b9d54c6ca32b2b3aca",
+        "password_hash": "8c52ee7b577f51d31a020fc2163347ba16569d595b60fa182c39a3b3971792a9"
+    }
+}
