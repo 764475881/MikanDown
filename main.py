@@ -48,7 +48,7 @@ def check_for_setup():
     qbit_is_set = config.get('qbit') and config['qbit'].get('host')
     has_feeds = len(config.get('feeds', [])) > 0
     wizard_complete = password_is_set and qbit_is_set and has_feeds
-    if not wizard_complete and request.endpoint not in ['wizard', 'setup', 'static', 'login', 'api_test_qbit', 'api_preview_feed']:
+    if not wizard_complete and request.endpoint not in ['wizard', 'setup', 'static', 'login', 'api_test_qbit', 'api_preview_feed', 'api_status']:
         return redirect(url_for('wizard'))
     if wizard_complete and request.endpoint == 'wizard':
         return redirect(url_for('index'))
@@ -158,7 +158,7 @@ def delete_feed(feed_id):
 
         if should_delete_files and qbit_category_to_delete:
             try:
-                qbt_client = Client(host=qbit_config.get('host'), port=qbit_config.get('port'), username=qbit_config.get('username'), password=qbit_config.get('password')); qbt_client.auth_log_in(); torrents = qbt_client.torrents_info(category=qbit_category_to_delete)
+                qbt_client = Client(host=qbit_config.get('host'), port=qbit_config.get('port'), username=qbit_config.get('username'), password=qbit_config.get('password'), VERIFY_WEBUI_CERTIFICATE=False, REQUESTS_ARGS={'timeout': (10, 30)}); qbt_client.auth_log_in(); torrents = qbt_client.torrents_info(category=qbit_category_to_delete)
                 if torrents: qbt_client.torrents_delete(delete_files=True, torrent_hashes=[t.hash for t in torrents])
                 qbt_client.torrents_remove_categories(categories=qbit_category_to_delete); history_list = load_history(); updated_history = [item for item in history_list if item.get('title') != qbit_category_to_delete]
                 if len(history_list) != len(updated_history): save_history(updated_history)
@@ -191,7 +191,7 @@ def update_qbit_settings():
 def api_test_qbit():
     data = request.json
     try:
-        qbt_client = Client(host=data.get('host'), port=data.get('port'), username=data.get('username'), password=data.get('password'))
+        qbt_client = Client(host=data.get('host'), port=data.get('port'), username=data.get('username'), password=data.get('password'), VERIFY_WEBUI_CERTIFICATE=False, REQUESTS_ARGS={'timeout': (10, 30)})
         qbt_client.auth_log_in()
         version = qbt_client.app.version()
         return jsonify({"success": True, "version": version})
@@ -204,7 +204,6 @@ def run_script():
     return jsonify({"success": True, "message": "任务已在后台启动"})
 
 @app.route('/api/status')
-@login_required
 def api_status():
     config = load_config()
     feed_count = len(config.get('feeds', []))
@@ -215,7 +214,7 @@ def api_status():
     try:
         qbit_config = config.get('qbit', {})
         if qbit_config.get('host'):
-            qbt_client = Client(host=qbit_config.get('host'), port=qbit_config.get('port'), username=qbit_config.get('username'), password=qbit_config.get('password'))
+            qbt_client = Client(host=qbit_config.get('host'), port=qbit_config.get('port'), username=qbit_config.get('username'), password=qbit_config.get('password'), VERIFY_WEBUI_CERTIFICATE=False, REQUESTS_ARGS={'timeout': (10, 30)})
             qbt_client.auth_log_in()
             all_torrents = qbt_client.torrents_info()
             active_torrents = len([t for t in all_torrents if t.state in ('downloading', 'queuedDL', 'stalledDL')])
@@ -272,7 +271,7 @@ def import_opml():
                 continue
             new_feed = {
                 "url": xml_url,
-                "title": outline.get('text', ''),
+                "title": outline.get('text', outline.get('title', '')),
                 "cover_url": "",
                 "filters": {
                     "include": outline.get('mikan_include_filter', ''),

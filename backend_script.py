@@ -124,7 +124,7 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notify_co
 
     # 尝试连接到 qBittorrent 客户端
     try:
-        qbt_client = Client(host=qbit_host, port=qbit_port, username=qbit_user, password=qbit_pass)
+        qbt_client = Client(host=qbit_host, port=qbit_port, username=qbit_user, password=qbit_pass, VERIFY_WEBUI_CERTIFICATE=False, REQUESTS_ARGS={'timeout': (10, 30)})
         qbt_client.auth_log_in()
         logger.info("✅ 成功连接到 qBittorrent。")
     except Exception as e:
