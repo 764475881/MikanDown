@@ -28,6 +28,10 @@
         .modal-content { background-color: var(--card-background-color); padding: 2rem; border-radius: var(--border-radius); width: 90%; max-width: 500px; text-align: center; }
         .modal-buttons { margin-top: 1.5rem; display: flex; justify-content: center; gap: 1rem; }
         .subgroup-tag { display: inline-block; background-color: var(--primary-focus); color: var(--primary-inverse); padding: 0.1rem 0.5rem; border-radius: var(--border-radius); font-size: 0.75rem; margin: 0 auto 0.5rem auto; }
+        .status-bar { display: flex; flex-wrap: wrap; gap: 0.8rem 1.5rem; padding: 0.6rem 0 1.2rem 0; font-size: 0.9rem; border-bottom: 1px solid var(--card-border); margin-bottom: 1.2rem; }
+        .status-item { display: inline-flex; align-items: center; gap: 0.3rem; }
+        .status-item .label { color: var(--muted-color); }
+        .status-item .value { font-weight: 600; }
     </style>
 </head>
 <body>
@@ -91,6 +95,13 @@
             <button type="submit" id="add-feed-btn">添加</button>
         </form>
     </div>
+    <div class="status-bar" id="status-bar">
+      <div class="status-item"><span class="label">📡 订阅</span><span class="value" id="stat-feeds">-</span></div>
+      <div class="status-item"><span class="label">📥 已下载</span><span class="value" id="stat-downloaded">-</span></div>
+      <div class="status-item"><span class="label">💾 活跃种子</span><span class="value" id="stat-torrents">-</span></div>
+      <div class="status-item"><span class="label">⏱ 上次更新</span><span class="value" id="stat-update">-</span></div>
+      <div class="status-item"><span class="label">💿 磁盘</span><span class="value" id="stat-disk">-</span></div>
+    </div>
     <div id="feeds-container"></div>
 </main>
 <div id="add-feed-modal-overlay" class="modal-overlay">
@@ -137,6 +148,20 @@
 
     // --- 初始渲染 ---
     renderFeeds(initialConfig.feeds);
+
+    // --- 加载仪表盘状态 ---
+    fetch('/api/status').then(r=>r.json()).then(d=>{
+      document.getElementById('stat-feeds').textContent = d.feed_count;
+      document.getElementById('stat-downloaded').textContent = d.downloaded_total;
+      document.getElementById('stat-torrents').textContent = d.active_torrents < 0 ? '未连接' : d.active_torrents;
+      document.getElementById('stat-update').textContent = d.last_update || '尚未运行';
+      if (d.disk_usage) {
+        let pct = Math.round(d.disk_usage.used / d.disk_usage.total * 100);
+        document.getElementById('stat-disk').textContent = d.disk_usage.free + 'G 空闲 (' + pct + '%)';
+      } else {
+        document.getElementById('stat-disk').textContent = '-';
+      }
+    }).catch(()=>{});
 
     // --- 核心函数：根据数据重新渲染订阅列表 ---
     function renderFeeds(feeds) {
