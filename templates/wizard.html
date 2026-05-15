@@ -1,34 +1,115 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="dark">
+<html lang="zh-CN" data-bs-theme="dark">
 <head>
   <meta charset="UTF-8">
   <title>设置向导 - MikanDown</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/css/tabler.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/js/tabler.min.js" defer></script>
   <style>
-    main { display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-    article { width: 100%; max-width: 520px; }
-    .step-indicator { display: flex; justify-content: center; gap: 0.5rem; margin-bottom: 1.5rem; }
-    .step-dot { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; background: var(--card-background-color); color: var(--muted-color); }
-    .step-dot.active { background: var(--primary); color: var(--primary-inverse); }
-    .step-dot.done { background: var(--primary-focus); color: var(--primary); }
-    .step-line { width: 40px; height: 2px; align-self: center; background: var(--card-background-color); }
-    .step-line.done { background: var(--primary-focus); }
+    /* ===== 海报墙 ===== */
+    .poster-wall { position: fixed; inset: 0; overflow: hidden; z-index: -1; }
+    .poster-wall-inner { width: 160%; height: 160%; position: absolute; top: -30%; left: -30%; transform: rotate(-8deg) scale(1.4); filter: blur(8px) brightness(0.25); }
+    .poster-wall-scroll { width: 100%; animation: scrollBg 40s linear infinite; }
+    .pw-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+    .poster-tile { aspect-ratio: 2 / 3; border-radius: 4px; }
+    @keyframes scrollBg { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
+    @media (prefers-reduced-motion: reduce) { .poster-wall-scroll { animation: none !important; } }
+
+    body { margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #1a1b1e; }
+
+    /* ===== 步骤指示器 ===== */
+    .step-indicator { display: flex; justify-content: center; align-items: center; gap: 0; margin-bottom: 2rem; }
+    .step-dot { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; background: #373a40; color: #868e96; transition: all 0.3s; }
+    .step-dot.active { background: linear-gradient(135deg, #e64980, #f06595); color: #fff; box-shadow: 0 0 12px rgba(230,73,128,0.5); }
+    .step-dot.done { background: #e64980; color: #fff; }
+    .step-line { width: 60px; height: 2px; background: #373a40; transition: background 0.3s; }
+    .step-line.done { background: #e64980; }
     .step-content { display: none; }
     .step-content.active { display: block; }
-    .btn-group { display: flex; justify-content: space-between; margin-top: 1rem; }
+
+    /* ===== 玻璃向导卡片 ===== */
+    .glass-wizard { background: rgba(26,27,30,0.6); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 2.5rem; box-shadow: 0 25px 60px rgba(0,0,0,0.6); width: 100%; max-width: 520px; }
+    .glass-wizard h3 { color: #fff; font-size: 1.2rem; margin: 0 0 0.25rem 0; }
+    .glass-wizard p { color: #868e96; font-size: 0.85rem; margin: 0 0 1.2rem 0; }
+    .glass-wizard input { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 0.65rem 0.8rem; color: #fff; font-size: 0.85rem; outline: none; width: 100%; box-sizing: border-box; margin-bottom: 0.7rem; }
+    .glass-wizard input:focus { border-color: #e64980; }
+    .btn-group { display: flex; justify-content: space-between; margin-top: 1.5rem; gap: 0.5rem; }
+    .btn-group .btn-primary { background: linear-gradient(135deg,#e64980,#f06595); color: #fff; border: none; border-radius: 8px; padding: 0.55rem 1.2rem; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+    .btn-group .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(230,73,128,0.4); }
+    .btn-group .btn-secondary { background: rgba(255,255,255,0.08); color: #c1c2c5; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 0.5rem 1rem; font-size: 0.85rem; cursor: pointer; }
     .result-msg { margin-top: 0.5rem; font-size: 0.85rem; }
-    .result-msg.success { color: var(--form-element-valid-border-color); }
-    .result-msg.error { color: var(--del-color); }
+    .result-msg.success { color: #69db7c; }
+    .result-msg.error { color: #ff6b6b; }
   </style>
 </head>
 <body>
-<main class="container">
-  <article>
-    <hgroup>
-      <h1>欢迎使用 MikanDown 🎉</h1>
-      <h2>几步完成初始设置</h2>
-    </hgroup>
+  <!-- 海报墙 -->
+  <div class="poster-wall">
+    <div class="poster-wall-inner">
+      <div class="poster-wall-scroll">
+        <div class="pw-grid">
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e64980,#f06595)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#7950f2,#9775fa)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#2f9e44,#69db7c)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e67700,#fab005)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e64980,#f06595)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#7950f2,#9775fa)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#2f9e44,#69db7c)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e64980,#f06595)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#7950f2,#9775fa)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e67700,#fab005)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#2f9e44,#69db7c)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e64980,#f06595)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e67700,#fab005)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#7950f2,#9775fa)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e64980,#f06595)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#2f9e44,#69db7c)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e67700,#fab005)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#7950f2,#9775fa)"></div>
+        </div>
+        <div class="pw-grid">
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e64980,#f06595)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#7950f2,#9775fa)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#2f9e44,#69db7c)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e67700,#fab005)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e64980,#f06595)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#7950f2,#9775fa)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#2f9e44,#69db7c)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e64980,#f06595)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#7950f2,#9775fa)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e67700,#fab005)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#2f9e44,#69db7c)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e64980,#f06595)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e67700,#fab005)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#7950f2,#9775fa)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e64980,#f06595)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#2f9e44,#69db7c)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e67700,#fab005)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#7950f2,#9775fa)"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="glass-wizard">
+    <div style="text-align:center;margin-bottom:1.5rem;">
+      <div style="font-size:1.5rem;font-weight:800;background:linear-gradient(135deg,#e64980,#f06595);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">MikanDown</div>
+      <p style="color:#868e96;font-size:0.8rem;margin:0.2rem 0 0 0;">🎉 几步完成初始设置</p>
+    </div>
 
     <div class="step-indicator">
       <div class="step-dot active" id="sd-1">1</div><div class="step-line" id="sl-1"></div>
@@ -38,61 +119,61 @@
 
     {% with messages = get_flashed_messages() %}
     {% if messages %}
-    <p style="color: var(--del-color);">{{ messages[0] }}</p>
+    <div class="alert alert-danger">{{ messages[0] }}</div>
     {% endif %}
     {% endwith %}
 
-    <!-- Step 1: 设置密码 -->
+    <!-- Step 1 -->
     <div class="step-content active" id="step-1">
       <h3>设置管理员账户</h3>
-      <p>创建你的管理员用户名和密码。</p>
+      <p>创建你的管理员用户名和密码</p>
       <form id="form-step1" method="post" action="{{ url_for('setup') }}">
         <input type="text" name="username" placeholder="管理员用户名" required>
         <input type="password" name="password" placeholder="设置密码" required>
         <input type="password" name="password_confirm" placeholder="确认密码" required>
-        <div class="btn-group">
-          <span></span>
-          <button type="submit">下一步</button>
-        </div>
+        <div class="btn-group"><span></span><button type="submit" class="btn-primary">下一步 →</button></div>
       </form>
     </div>
 
-    <!-- Step 2: 配置 qBittorrent -->
+    <!-- Step 2 -->
     <div class="step-content" id="step-2">
       <h3>连接 qBittorrent</h3>
-      <p>填入 qBittorrent Web UI 的连接信息。</p>
+      <p>填入 qBittorrent Web UI 的连接信息</p>
       <form id="form-step2">
         <input type="text" id="qbit_host" placeholder="qBittorrent 地址 (如 192.168.1.100)" required>
-        <input type="text" id="qbit_port" placeholder="端口 (默认 8080)" value="8080" required>
-        <input type="text" id="qbit_user" placeholder="用户名 (默认 admin)" value="admin">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;">
+          <input type="text" id="qbit_port" placeholder="端口 (默认 8080)" value="8080" required>
+          <input type="text" id="qbit_user" placeholder="用户名 (默认 admin)" value="admin">
+        </div>
         <input type="password" id="qbit_pass" placeholder="密码">
         <input type="text" id="qbit_path" placeholder="保存路径 (如 /downloads/)" value="/downloads/">
         <div id="qbit-result" class="result-msg"></div>
         <div class="btn-group">
-          <button type="button" class="secondary" onclick="goStep(1)">上一步</button>
-          <button type="submit">测试连接并继续</button>
+          <button type="button" class="btn-secondary" onclick="goStep(1)">← 上一步</button>
+          <button type="submit" class="btn-primary">测试连接并继续 →</button>
         </div>
       </form>
     </div>
 
-    <!-- Step 3: 添加订阅 -->
+    <!-- Step 3 -->
     <div class="step-content" id="step-3">
       <h3>添加你的第一个订阅（可选）</h3>
-      <p>输入 Mikan Project 的 RSS 订阅链接，或跳过稍后添加。</p>
+      <p>输入 Mikan Project 的 RSS 订阅链接，或跳过稍后添加</p>
       <form id="form-step3">
         <input type="url" id="rss_url" placeholder="RSS URL (右键 MikanProject 复制链接地址)">
         <div id="rss-result" class="result-msg"></div>
         <div class="btn-group">
-          <button type="button" class="secondary" onclick="goStep(2)">上一步</button>
-          <button type="button" class="secondary" id="skip-step3" onclick="window.location.href='/'">跳过</button>
-          <button type="submit">测试并完成</button>
+          <button type="button" class="btn-secondary" onclick="goStep(2)">← 上一步</button>
+          <button type="button" class="btn-secondary" id="skip-step3" onclick="window.location.href='/'">跳过</button>
+          <button type="submit" class="btn-primary">测试并完成</button>
         </div>
       </form>
     </div>
 
-    <p id="wizard-done" style="display:none; text-align:center; color: var(--form-element-valid-border-color);">✅ 设置完成！<a href="{{ url_for('index') }}">进入主界面</a></p>
-  </article>
-</main>
+    <p id="wizard-done" style="display:none;text-align:center;color:#69db7c;font-size:0.9rem;">
+      ✅ 设置完成！<a href="{{ url_for('index') }}" style="color:#f06595;text-decoration:none;">进入主界面</a>
+    </p>
+  </div>
 
 <script>
 let currentStep = 1;
@@ -110,24 +191,17 @@ function goStep(n) {
   currentStep = n;
 }
 
-// 页面加载时检测已完成的步骤，自动跳转到未完成的步骤
 (async function initWizard() {
   const res = await fetch('/api/status');
   const data = await res.json();
   if (data.auth_set && data.qbit_set) {
-    // 全部完成（订阅可选，因为在主界面添加），跳转到首页
     window.location.href = '/';
     return;
   }
   if (data.auth_set) {
-    goStep(2); // auth 设了但 qbit 没设，跳到步骤 2
+    goStep(2);
   }
-  // 否则留在步骤 1
 })();
-
-document.getElementById('form-step1')?.addEventListener('submit', function(e) {
-  // 让表单正常提交到 /setup
-});
 
 document.getElementById('form-step2')?.addEventListener('submit', async function(e) {
   e.preventDefault();

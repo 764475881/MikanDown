@@ -1,36 +1,107 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="dark">
+<html lang="zh-CN" data-bs-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <title>初始设置 - RSS 下载器</title>
+  <title>初始设置 - MikanDown</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/css/tabler.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/js/tabler.min.js" defer></script>
   <style>
-    main { display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-    article { width: 100%; max-width: 450px; }
+    .poster-wall { position: fixed; inset: 0; overflow: hidden; z-index: -1; }
+    .poster-wall-inner { width: 160%; height: 160%; position: absolute; top: -30%; left: -30%; transform: rotate(-8deg) scale(1.4); filter: blur(8px) brightness(0.25); }
+    .poster-wall-scroll { width: 100%; animation: scrollBg 40s linear infinite; }
+    .pw-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+    .poster-tile { aspect-ratio: 2 / 3; border-radius: 4px; }
+    @keyframes scrollBg { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
+    @media (prefers-reduced-motion: reduce) { .poster-wall-scroll { animation: none !important; } }
+    body { margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #1a1b1e; }
+    .glass-card { background: rgba(26, 27, 30, 0.55); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 16px; padding: 2.5rem; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6); width: 100%; max-width: 460px; }
+    .glass-card .gradient-logo { font-size: 2rem; font-weight: 800; background: linear-gradient(135deg, #e64980, #f06595); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .glass-card input { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 0.65rem 0.8rem; color: #fff; font-size: 0.85rem; outline: none; transition: border-color 0.2s; width: 100%; box-sizing: border-box; }
+    .glass-card input:focus { border-color: #e64980; }
+    .glass-card .btn-primary { width: 100%; margin-top: 1.2rem; background: linear-gradient(135deg, #e64980, #f06595); color: #fff; border: none; border-radius: 8px; padding: 0.7rem; font-weight: 600; font-size: 0.9rem; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+    .glass-card .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(230, 73, 128, 0.4); }
   </style>
 </head>
 <body>
-<main class="container">
-  <article>
-    <hgroup>
-      <h1>欢迎使用 RSS 下载器</h1>
-      <h2>首次运行，请创建管理员账户</h2>
-    </hgroup>
+  <div class="poster-wall">
+    <div class="poster-wall-inner">
+      <div class="poster-wall-scroll">
+        <div class="pw-grid">
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e64980,#f06595)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#7950f2,#9775fa)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#2f9e44,#69db7c)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e67700,#fab005)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e64980,#f06595)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#7950f2,#9775fa)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#2f9e44,#69db7c)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e64980,#f06595)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#7950f2,#9775fa)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e67700,#fab005)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#2f9e44,#69db7c)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e64980,#f06595)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e67700,#fab005)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#7950f2,#9775fa)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e64980,#f06595)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#2f9e44,#69db7c)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e67700,#fab005)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#7950f2,#9775fa)"></div>
+        </div>
+        <div class="pw-grid">
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e64980,#f06595)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#7950f2,#9775fa)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#2f9e44,#69db7c)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e67700,#fab005)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e64980,#f06595)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#7950f2,#9775fa)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#2f9e44,#69db7c)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e64980,#f06595)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#7950f2,#9775fa)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e67700,#fab005)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#2f9e44,#69db7c)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e64980,#f06595)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e67700,#fab005)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#7950f2,#9775fa)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e64980,#f06595)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#2f9e44,#69db7c)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#e67700,#fab005)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#1c7ed6,#4dabf7)"></div>
+          <div class="poster-tile" style="background:linear-gradient(135deg,#7950f2,#9775fa)"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="glass-card">
+    <div style="text-align:center;margin-bottom:1.5rem;">
+      <div class="gradient-logo">MikanDown</div>
+      <p style="color:#868e96;font-size:0.8rem;">首次运行，请创建管理员账户</p>
+    </div>
 
     {% with messages = get_flashed_messages() %}
     {% if messages %}
-    <p style="color: var(--pico-color-red);">{{ messages[0] }}</p>
+    <div class="alert alert-danger">{{ messages[0] }}</div>
     {% endif %}
     {% endwith %}
 
-    <form method="post">
+    <form method="post" style="display:flex;flex-direction:column;gap:0.7rem;">
       <input type="text" name="username" placeholder="设置管理员用户名" required>
       <input type="password" name="password" placeholder="设置密码" required>
       <input type="password" name="password_confirm" placeholder="确认密码" required>
-      <button type="submit">创建账户并开始使用</button>
+      <button type="submit" class="btn-primary">创建账户并开始</button>
     </form>
-  </article>
-</main>
+  </div>
 </body>
 </html>

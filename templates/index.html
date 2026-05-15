@@ -1,44 +1,91 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="dark">
+<html lang="zh-CN" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
-    <title>RSS 下载器</title>
+    <title>RSS 下载器 - MikanDown</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/css/tabler.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/js/tabler.min.js" defer></script>
     <style>
-        :root { --spacing-vertical: 1.5rem; }
-        .sidebar { position: fixed; left: 0; top: 0; height: 100vh; width: 320px; background-color: var(--background-color); padding: 1rem; border-right: 1px solid var(--card-border); z-index: 100; overflow-y: auto; transform: translateX(0); transition: transform 0.3s ease-in-out, width 0.3s ease-in-out; }
-        .sidebar-toggle { position: fixed; left: 320px; top: 50%; transform: translateY(-50%); z-index: 101; width: 24px; height: 70px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; background-color: var(--primary); color: var(--primary-inverse); border: 1px solid var(--primary-focus); border-left: none; border-radius: 0 8px 8px 0; cursor: pointer; transition: left 0.3s ease-in-out; }
+        body { background: #1a1b1e; color: #c1c2c5; }
+
+        /* ===== 侧边栏 ===== */
+        .sidebar { position: fixed; left: 0; top: 0; height: 100vh; width: 300px; background: #232529; border-right: 1px solid rgba(255,255,255,0.06); z-index: 100; overflow-y: auto; transform: translateX(0); transition: transform 0.3s ease-in-out; padding: 1rem; }
+        .sidebar-toggle { position: fixed; left: 300px; top: 50%; transform: translateY(-50%); z-index: 101; width: 24px; height: 70px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; background: #e64980; color: #fff; border: none; border-left: none; border-radius: 0 8px 8px 0; cursor: pointer; transition: left 0.3s ease-in-out; }
         body.sidebar-collapsed .sidebar { transform: translateX(-100%); }
         body.sidebar-collapsed .main-content { margin-left: 0; width: 100%; }
         body.sidebar-collapsed .sidebar-toggle { left: 0; }
-        .main-content { margin-left: 320px; width: calc(100% - 320px); padding: 1rem; transition: margin-left 0.3s ease-in-out, width 0.3s ease-in-out; }
-        .page-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; }
-        .add-feed-form { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; }
-        .add-feed-form input { min-width: 300px; margin-bottom: 0; }
-        .feeds-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 220px)); gap: 1rem; justify-content: center; }
-        .card { padding: 0.75rem; text-align: center; display: flex; flex-direction: column; justify-content: space-between; height: 100%; background-color: var(--card-background-color); border-radius: var(--border-radius); border: 1px solid var(--card-border); }
-        .card img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; margin-bottom: 0.5rem; border-radius: var(--border-radius); }
-        .card h6 { margin: 0 0 0.5rem 0; font-size: 0.9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .card-footer { display: flex; justify-content: center; align-items: center; padding-top: 0.5rem; border-top: 1px solid var(--card-border); font-size: 0.75rem; }
-        .card-footer button, .card-footer a { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
-        .log-container { height: 250px; overflow-y: scroll; background-color: var(--code-background-color); font-family: var(--font-mono); padding: 0.75rem; border-radius: var(--border-radius); white-space: pre-wrap; font-size: 0.8rem; margin-top: 1rem; }
-        .control-section { margin-bottom: var(--spacing-vertical); }
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 1000; }
-        .modal-content { background-color: var(--card-background-color); padding: 2rem; border-radius: var(--border-radius); width: 90%; max-width: 500px; text-align: center; }
-        .modal-buttons { margin-top: 1.5rem; display: flex; justify-content: center; gap: 1rem; }
-        .subgroup-tag { display: inline-block; background-color: var(--primary-focus); color: var(--primary-inverse); padding: 0.1rem 0.5rem; border-radius: var(--border-radius); font-size: 0.75rem; margin: 0 auto 0.5rem auto; }
-        .status-bar { display: flex; flex-wrap: wrap; gap: 0.8rem 1.5rem; padding: 0.6rem 0 1.2rem 0; font-size: 0.9rem; border-bottom: 1px solid var(--card-border); margin-bottom: 1.2rem; }
-        .status-item { display: inline-flex; align-items: center; gap: 0.3rem; }
-        .status-item .label { color: var(--muted-color); }
-        .status-item .value { font-weight: 600; }
+
+        .sidebar h1 { color: #fff; font-size: 1.2rem; text-align: center; margin-bottom: 1.5rem; padding-bottom: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.06); }
+
+        /* ===== 控制区 ===== */
+        .control-section { margin-bottom: 1.5rem; }
+        .control-section h2 { color: #868e96; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; }
+        .control-section label { color: #c1c2c5; font-size: 0.8rem; margin-bottom: 0.3rem; display: block; }
+        .control-section input { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 0.5rem 0.65rem; color: #c1c2c5; font-size: 0.8rem; outline: none; width: 100%; box-sizing: border-box; margin-bottom: 0.5rem; }
+        .control-section input:focus { border-color: #e64980; }
+        .control-section button { width: 100%; padding: 0.45rem; border-radius: 6px; font-size: 0.8rem; cursor: pointer; border: none; }
+        .btn-sidebar-save { background: rgba(255,255,255,0.08); color: #c1c2c5; }
+        .btn-sidebar-primary { background: linear-gradient(135deg, #e64980, #f06595); color: #fff; }
+        .btn-sidebar-contrast { background: #2b2d30; color: #c1c2c5; border: 1px solid rgba(255,255,255,0.1); display:block; text-align:center; padding:0.45rem; border-radius:6px; text-decoration:none; }
+
+        /* ===== 主内容区 ===== */
+        .main-content { margin-left: 300px; width: calc(100% - 300px); padding: 1rem 1.5rem; transition: margin-left 0.3s ease-in-out, width 0.3s ease-in-out; box-sizing: border-box; }
+
+        /* ===== 顶部栏 ===== */
+        .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        .topbar h2 { color: #fff; font-size: 1.3rem; margin: 0; }
+        .topbar-actions { display: flex; align-items: center; gap: 0.75rem; }
+        .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #e64980, #f06595); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; color: #fff; font-weight: 600; }
+
+        /* ===== 状态卡片 ===== */
+        .status-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: #232529; border-radius: 12px; padding: 1rem 1.2rem; border: 1px solid rgba(255,255,255,0.06); }
+        .stat-card .stat-label { font-size: 0.7rem; color: #868e96; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.3rem; }
+        .stat-card .stat-value { font-size: 1.8rem; font-weight: 700; color: #fff; }
+        .stat-card .stat-sub { font-size: 0.7rem; color: #868e96; margin-top: 0.2rem; }
+
+        /* ===== 添加订阅栏 ===== */
+        .add-feed-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.2rem; }
+        .add-feed-row input { flex: 1; background: #232529; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 0.55rem 0.75rem; color: #c1c2c5; font-size: 0.85rem; outline: none; }
+        .add-feed-row input:focus { border-color: #e64980; }
+        .btn-add-feed { background: linear-gradient(135deg, #e64980, #f06595); color: #fff; border: none; border-radius: 8px; padding: 0.55rem 1.2rem; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+        .btn-add-feed:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(230,73,128,0.4); }
+
+        /* ===== 订阅卡片网格 ===== */
+        .feeds-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 0.85rem; }
+        .feed-card { background: #232529; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.06); transition: transform 0.15s, box-shadow 0.15s; }
+        .feed-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
+        .feed-card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; }
+        .feed-card .card-body { padding: 0.6rem; }
+        .feed-card .card-body h6 { color: #fff; font-size: 0.8rem; margin: 0 0 0.2rem 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .feed-card .card-body .subgroup { font-size: 0.65rem; color: #868e96; }
+        .feed-card .card-footer { padding: 0.5rem 0.6rem; border-top: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: center; }
+        .feed-card .card-footer .delete-btn { background: transparent; color: #e64980; border: 1px solid #e64980; border-radius: 6px; padding: 0.25rem 0.5rem; font-size: 0.65rem; cursor: pointer; width: 100%; transition: background 0.15s; }
+        .feed-card .card-footer .delete-btn:hover { background: rgba(230,73,128,0.1); }
+
+        /* ===== 日志 ===== */
+        .log-container { height: 200px; overflow-y: scroll; background: rgba(0,0,0,0.3); font-family: 'Menlo', 'Consolas', monospace; padding: 0.75rem; border-radius: 8px; white-space: pre-wrap; font-size: 0.75rem; color: #c1c2c5; border: 1px solid rgba(255,255,255,0.06); margin-top: 0.5rem; }
+
+        /* ===== 模态框 ===== */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: #232529; padding: 2rem; border-radius: 12px; width: 90%; max-width: 500px; text-align: center; border: 1px solid rgba(255,255,255,0.06); }
+        .modal-content h3 { color: #fff; margin: 0 0 1rem 0; font-size: 1.1rem; }
+        .modal-content p { color: #c1c2c5; font-size: 0.9rem; }
+        .modal-content input { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 0.5rem 0.65rem; color: #c1c2c5; font-size: 0.8rem; outline: none; width: 100%; box-sizing: border-box; margin-bottom: 0.5rem; }
+        .modal-content input:focus { border-color: #e64980; }
+        .modal-buttons { margin-top: 1.5rem; display: flex; justify-content: center; gap: 0.75rem; }
+        .modal-buttons button { padding: 0.45rem 1rem; border-radius: 6px; font-size: 0.8rem; cursor: pointer; border: none; }
+        .modal-buttons .btn-modal-secondary { background: rgba(255,255,255,0.08); color: #c1c2c5; }
+        .modal-buttons .btn-modal-primary { background: linear-gradient(135deg, #e64980, #f06595); color: #fff; }
     </style>
 </head>
 <body>
 
 <aside class="sidebar" id="sidebar">
+    <h1>MikanDown</h1>
 
-    <h1 style="text-align: center;">控制台</h1>
     <section class="control-section">
         <h2>qBittorrent 设置</h2>
         <form id="qbit-settings-form">
@@ -52,9 +99,10 @@
             <input type="password" id="qbit_password" name="qbit_password" value="{{ config.qbit.password if config.qbit else '' }}">
             <label for="qbit_save_path">根下载路径</label>
             <input type="text" id="qbit_save_path" name="qbit_save_path" value="{{ config.qbit.save_path_base if config.qbit else '' }}">
-            <button type="submit">保存qBit设置</button>
+            <button type="submit" class="btn-sidebar-primary">保存 qBit 设置</button>
         </form>
     </section>
+
     <section class="control-section">
         <h2>全局过滤器</h2>
         <form id="global-filters-form">
@@ -62,72 +110,94 @@
             <input type="text" id="include_keywords" name="include_keywords" value="{{ config.filters.include if config.filters else '' }}">
             <label for="exclude_keywords">必须不含 (空格分隔)</label>
             <input type="text" id="exclude_keywords" name="exclude_keywords" value="{{ config.filters.exclude if config.filters else '' }}">
-            <button type="submit">保存全局规则</button>
+            <button type="submit" class="btn-sidebar-save">保存全局规则</button>
         </form>
     </section>
+
     <section class="control-section">
         <h2>代理设置</h2>
-        <form id="proxy-form" style="margin-bottom: 1rem;">
+        <form id="proxy-form">
             <label for="http_proxy">HTTP/S 代理</label>
             <input type="text" id="http_proxy" name="http_proxy" placeholder="http://127.0.0.1:7890" value="{{ config.proxy.http }}">
-            <button type="submit">保存代理</button>
+            <button type="submit" class="btn-sidebar-save">保存代理</button>
         </form>
     </section>
+
     <section class="control-section">
         <h2>手动检查</h2>
-        <a href="#" id="run-btn" role="button" class="contrast" style="width: 100%;">立即运行检查</a>
+        <a href="#" id="run-btn" class="btn-sidebar-contrast">立即运行检查</a>
     </section>
+
     <section class="control-section">
         <h2>订阅备份</h2>
-        <div style="display:flex; gap:0.5rem;">
-            <button class="secondary" style="flex:1; font-size:0.8rem;" onclick="document.getElementById('opml-file-input').click()">📥 导入 OPML</button>
-            <a href="/api/feeds/export" class="secondary" style="flex:1; font-size:0.8rem; text-align:center; padding:0.5rem; border-radius:var(--border-radius); border:1px solid var(--form-element-border-color); text-decoration:none;">📤 导出 OPML</a>
+        <div style="display:flex;gap:0.5rem;">
+            <button class="btn-sidebar-save" style="flex:1;" onclick="document.getElementById('opml-file-input').click()">📥 导入 OPML</button>
+            <a href="/api/feeds/export" class="btn-sidebar-save" style="flex:1;text-align:center;padding:0.45rem;border-radius:6px;text-decoration:none;display:block;">📤 导出 OPML</a>
         </div>
         <input type="file" id="opml-file-input" accept=".opml,.xml" style="display:none;" onchange="importOPML(this)">
     </section>
+
     <section class="control-section">
-        <a href="/logout" role="button" class="secondary" style="width: 100%;">登出</a>
-    </section>
-    <section class="control-section">
-        <h3>实时日志</h3>
+        <h2>日志</h2>
         <div id="log" class="log-container">等待任务开始...</div>
     </section>
 </aside>
 
 <button id="sidebar-toggle" class="sidebar-toggle" title="切换侧边栏">◀</button>
+
 <main class="main-content" id="main-content">
-    <div class="page-header">
+    <div class="topbar">
         <h2>当前订阅列表</h2>
-        <form id="add-feed-form" class="add-feed-form">
-            <input type="url" id="rss_url" name="rss_url" placeholder="https://mikanani.me/RSS/..." required>
-            <button type="submit" id="add-feed-btn">添加</button>
-        </form>
+        <div class="topbar-actions">
+            <div class="user-avatar">A</div>
+            <span style="color:#c1c2c5;font-size:0.85rem;">admin</span>
+            <a href="/logout" class="btn-sidebar-save" style="display:inline;padding:0.35rem 0.7rem;text-decoration:none;font-size:0.8rem;">登出</a>
+        </div>
     </div>
-    <div class="status-bar" id="status-bar">
-      <div class="status-item"><span class="label">📡 订阅</span><span class="value" id="stat-feeds">-</span></div>
-      <div class="status-item"><span class="label">📥 已下载</span><span class="value" id="stat-downloaded">-</span></div>
-      <div class="status-item"><span class="label">💾 活跃种子</span><span class="value" id="stat-torrents">-</span></div>
-      <div class="status-item"><span class="label">⏱ 上次更新</span><span class="value" id="stat-update">-</span></div>
-      <div class="status-item"><span class="label">💿 磁盘</span><span class="value" id="stat-disk">-</span></div>
+
+    <div class="status-cards">
+        <div class="stat-card">
+            <div class="stat-label">📡 订阅</div>
+            <div class="stat-value" id="stat-feeds">-</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">📥 已下载</div>
+            <div class="stat-value" id="stat-downloaded">-</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">💾 活跃种子</div>
+            <div class="stat-value" id="stat-torrents">-</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">💿 磁盘</div>
+            <div class="stat-value" id="stat-disk">-</div>
+            <div class="stat-sub" id="stat-disk-sub"></div>
+        </div>
     </div>
+
+    <form id="add-feed-form" class="add-feed-row">
+        <input type="url" id="rss_url" name="rss_url" placeholder="https://mikanani.me/RSS/..." required>
+        <button type="submit" id="add-feed-btn" class="btn-add-feed">添加</button>
+    </form>
+
     <div id="feeds-container"></div>
 </main>
+
 <div id="add-feed-modal-overlay" class="modal-overlay">
     <div class="modal-content" onclick="event.stopPropagation();">
         <h3 id="add-modal-title">为 "Some Title" 添加订阅</h3>
         <p>请确认或修改此订阅的过滤规则（将继承全局规则）：</p>
         <form id="add-feed-confirm-form">
-            <label for="add-include">必须包含 (空格分隔)</label>
-            <input type="text" id="add-include" name="include">
-            <label for="add-exclude">必须不含 (空格分隔)</label>
-            <input type="text" id="add-exclude" name="exclude">
+            <input type="text" id="add-include" name="include" placeholder="必须包含 (空格分隔)">
+            <input type="text" id="add-exclude" name="exclude" placeholder="必须不含 (空格分隔)">
             <div class="modal-buttons">
-                <button type="button" class="secondary" id="add-modal-cancel-btn">取消</button>
-                <button type="submit" class="contrast">确认添加</button>
+                <button type="button" class="btn-modal-secondary" id="add-modal-cancel-btn">取消</button>
+                <button type="submit" class="btn-modal-primary">确认添加</button>
             </div>
         </form>
     </div>
 </div>
+
 <div id="custom-modal-overlay" class="modal-overlay">
     <div class="modal-content" onclick="event.stopPropagation();">
         <h3 id="modal-title">对话框标题</h3>
@@ -137,7 +207,6 @@
 </div>
 
 <script>
-    // --- 元素获取 ---
     const qbitSettingsForm = document.getElementById('qbit-settings-form');
     const globalFiltersForm = document.getElementById('global-filters-form');
     const proxyForm = document.getElementById('proxy-form');
@@ -154,48 +223,45 @@
     let currentRssUrlToAdd = '';
     let currentRssTitleToAdd = '';
 
-    // --- 初始渲染 ---
     renderFeeds(initialConfig.feeds);
 
-    // --- 加载仪表盘状态 ---
     fetch('/api/status').then(r=>r.json()).then(d=>{
       document.getElementById('stat-feeds').textContent = d.feed_count;
       document.getElementById('stat-downloaded').textContent = d.downloaded_total;
       document.getElementById('stat-torrents').textContent = d.active_torrents < 0 ? '未连接' : d.active_torrents;
-      document.getElementById('stat-update').textContent = d.last_update || '尚未运行';
+      document.getElementById('stat-disk').textContent = d.last_update || '尚未运行';
       if (d.disk_usage) {
         let pct = Math.round(d.disk_usage.used / d.disk_usage.total * 100);
         document.getElementById('stat-disk').textContent = d.disk_usage.free + 'G 空闲 (' + pct + '%)';
+        document.getElementById('stat-disk-sub').textContent = '共 ' + Math.round(d.disk_usage.total/1024) + 'TB';
       } else {
         document.getElementById('stat-disk').textContent = '-';
       }
     }).catch(()=>{});
 
-    // --- 核心函数：根据数据重新渲染订阅列表 ---
     function renderFeeds(feeds) {
         if (!feeds || feeds.length === 0) {
-            feedsContainer.innerHTML = '<p>还没有添加任何 RSS 订阅。请在左侧添加。</p>';
+            feedsContainer.innerHTML = '<p style="color:#868e96;text-align:center;padding:2rem;">还没有添加任何 RSS 订阅。请在上方添加。</p>';
             return;
         }
         const gridHtml = feeds.map((feed, index) => {
             const subgroup = feed.subgroup || '未知';
             return `
-            <div class="card">
-                <div>
-                    <img src="https://mikanani.me${feed.cover_url || '/images/Bangumi/default.jpg'}" alt="${feed.title} Cover"
-                         onerror="this.onerror=null;this.src='https://placehold.co/400x600/232830/dee2e6?text=No+Image';">
+            <div class="feed-card">
+                <img src="https://mikanani.me${feed.cover_url || '/images/Bangumi/default.jpg'}" alt="${feed.title} Cover"
+                     onerror="this.onerror=null;this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22600%22%3E%3Crect fill=%22%23232529%22 width=%22400%22 height=%22600%22/%3E%3Ctext fill=%22%23868e96%22 font-size=%2220%22 x=%22150%22 y=%22300%22%3ENo Image%3C/text%3E%3C/svg%3E';">
+                <div class="card-body">
                     <h6 title="${feed.title}">${feed.title}</h6>
-                    <p class="subgroup-tag">${subgroup}</p>
+                    <span class="subgroup">${subgroup}</span>
                 </div>
-                <footer class="card-footer">
-                    <button class="secondary outline delete-btn" data-id="${index}" data-title="${feed.title}">删除</button>
-                </footer>
+                <div class="card-footer">
+                    <button class="delete-btn" data-id="${index}" data-title="${feed.title}">删除</button>
+                </div>
             </div>`;
         }).join('');
         feedsContainer.innerHTML = `<div class="feeds-grid">${gridHtml}</div>`;
     }
 
-    // --- 事件监听 ---
     qbitSettingsForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         const btn = qbitSettingsForm.querySelector('button');
@@ -282,7 +348,6 @@
         fetch('/run');
     });
 
-    // 使用事件委托来处理所有删除按钮的点击
     feedsContainer.addEventListener('click', (event) => {
         const button = event.target.closest('.delete-btn');
         if (button) {
@@ -292,7 +357,6 @@
         }
     });
 
-    // --- 删除确认逻辑 ---
     const modalOverlay = document.getElementById('custom-modal-overlay');
     const modalTitle = document.getElementById('modal-title');
     const modalText = document.getElementById('modal-text');
@@ -311,28 +375,24 @@
     function showStep1(feedTitle) {
         modalTitle.innerText = '确认删除订阅';
         modalText.innerText = `您确定要删除订阅 "${feedTitle}" 吗？`;
-        modalButtons.innerHTML = `<button class="secondary" onclick="closeModal()">取消</button><button onclick="showStep2('${feedTitle.replace(/'/g, "\\'")}')">下一步</button>`;
+        modalButtons.innerHTML = `<button class="btn-modal-secondary" onclick="closeModal()">取消</button><button class="btn-modal-primary" onclick="showStep2('${feedTitle.replace(/'/g, "\\'")}')">下一步</button>`;
         modalOverlay.style.display = 'flex';
     }
 
     function showStep2(feedTitle) {
         modalTitle.innerText = '删除相关文件';
         modalText.innerText = `要同时删除 qBittorrent 中所有已下载的 "${feedTitle}" 相关文件吗？`;
-        modalButtons.innerHTML = `<button class="secondary" onclick="closeModal()">取消操作</button><button class="outline" onclick="deleteFeed(false)">仅移除订阅</button><button class="contrast" onclick="deleteFeed(true)">全部删除</button>`;
+        modalButtons.innerHTML = `<button class="btn-modal-secondary" onclick="closeModal()">取消操作</button><button class="btn-modal-secondary" onclick="deleteFeed(false)">仅移除订阅</button><button class="btn-modal-primary" onclick="deleteFeed(true)">全部删除</button>`;
     }
 
     async function deleteFeed(deleteFiles) {
         if (currentFeedId === null) return;
-
         modalText.innerText = '正在处理，请稍候...';
-        modalButtons.innerHTML = `<button aria-busy="true">删除中...</button>`;
-
+        modalButtons.innerHTML = `<button aria-busy="true" style="background:rgba(255,255,255,0.08);color:#c1c2c5;padding:0.45rem 1rem;border:none;border-radius:6px;">删除中...</button>`;
         const url = `/delete/${currentFeedId}?delete_files=${deleteFiles}`;
-
         try {
             const response = await fetch(url);
             const data = await response.json();
-
             if (data.success) {
                 initialConfig = data.config;
                 renderFeeds(data.config.feeds);
@@ -361,9 +421,8 @@
         addFeedModalOverlay.style.display = 'none';
     }
     addFeedModalOverlay.addEventListener('click', closeAddModal);
-    document.querySelector('#add-feed-modal-overlay .modal-content button.secondary').addEventListener('click', closeAddModal);
+    document.querySelector('#add-feed-modal-overlay .modal-content .btn-modal-secondary')?.addEventListener('click', closeAddModal);
 
-    // --- 侧边栏折叠逻辑 ---
     const storageKey = 'sidebarCollapsed';
     if (localStorage.getItem(storageKey) === 'true') {
         body.classList.add('sidebar-collapsed');
@@ -376,7 +435,6 @@
         localStorage.setItem(storageKey, isCollapsed);
     });
 
-    // --- 日志流 ---
     const eventSource = new EventSource('/log');
     eventSource.onmessage = function(event) {
         if (logContainer.innerHTML.includes('等待任务开始')) { logContainer.innerHTML = ''; }
@@ -392,7 +450,7 @@
       if (!input.files.length) return;
       const formData = new FormData();
       formData.append('file', input.files[0]);
-      const btn = input.previousElementSibling.querySelector('button') || document.querySelector('button[onclick*="opml-file-input"]');
+      const btn = document.querySelector('.btn-sidebar-save[onclick*="opml-file-input"]');
       if (btn) { btn.textContent = '导入中...'; btn.disabled = true; }
       try {
         const res = await fetch('/api/feeds/import', {method:'POST', body: formData});
@@ -410,6 +468,5 @@
       input.value = '';
     }
 </script>
-
 </body>
 </html>
