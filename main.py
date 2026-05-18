@@ -15,7 +15,8 @@ from bs4 import BeautifulSoup
 from flask import Flask, Response, render_template, request, jsonify, session, redirect, url_for, flash
 from flask_apscheduler import APScheduler
 
-from backend_script import (process_all_feeds, load_history, save_history, clean_category_name)
+from backend_script import (process_all_feeds, load_history, save_history, clean_category_name, detect_missing_episodes)
+from bangumi_api import search_subjects, get_subject
 from curl_cffi import requests as cffi_requests
 import feedparser
 from qbittorrentapi import Client
@@ -33,6 +34,10 @@ last_update_time = None
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8'), logging.StreamHandler()])
 logger = logging.getLogger(__name__)
 
+# 缺集检测缓存（内存）
+_missing_cache: dict = {}
+_missing_cache_time: float = 0
+
 def load_config():
     try:
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f: return json.load(f)
@@ -49,7 +54,7 @@ def check_for_setup():
     has_feeds = len(config.get('feeds', [])) > 0
     # 如果 auth 和 qbit 都设置了，向导即可视为完成；订阅可稍后添加
     wizard_complete = password_is_set and qbit_is_set
-    if not wizard_complete and request.endpoint not in ['wizard', 'setup', 'static', 'login', 'api_test_qbit', 'preview_feed', 'api_status', 'update_qbit_settings', 'add_feed', 'update_global_filters', 'update_proxy', 'delete_feed']:
+    if not wizard_complete and request.endpoint not in ['wizard', 'setup', 'static', 'login', 'api_test_qbit', 'preview_feed', 'api_status', 'update_qbit_settings', 'add_feed', 'update_global_filters', 'update_proxy', 'delete_feed', 'bangumi_search', 'bangumi_set', 'feeds_missing', 'feed_missing', 'add_single_torrent']:
         return redirect(url_for('wizard'))
     if wizard_complete and request.endpoint == 'wizard':
         return redirect(url_for('index'))
@@ -287,6 +292,185 @@ def import_opml():
         return jsonify({"success": True, "imported": imported_count, "total": len(config['feeds'])})
     except ET.ParseError as e:
         return jsonify({"success": False, "message": f"OPML 解析失败: {e}"}), 400
+
+
+# ── Bangumi 搜索 ──────────────────────────────────────
+
+@app.route('/api/feeds/bangumi-search', methods=['POST'])
+@login_required
+def bangumi_search():
+    """搜索 Bangumi 番剧"""
+    data = request.json
+    keyword = (data.get('keyword') or '').strip()
+    if not keyword:
+        return jsonify({"success": False, "message": "请输入关键词"}), 400
+    results = search_subjects(keyword)
+    return jsonify({"success": True, "results": results})
+
+
+# ── 设置 Bangumi ID ───────────────────────────────────
+
+@app.route('/api/feeds/<int:feed_id>/bangumi-set', methods=['POST'])
+@login_required
+def bangumi_set(feed_id):
+    """手动为某个 feed 设置 bangumi_subject_id"""
+    config = load_config()
+    if feed_id < 0 or feed_id >= len(config['feeds']):
+        return jsonify({"success": False, "message": "无效的 Feed ID"}), 404
+
+    data = request.json
+    subject_id = data.get('bangumi_subject_id')
+    if not subject_id:
+        return jsonify({"success": False, "message": "缺少 bangumi_subject_id"}), 400
+
+    # 验证 subject_id 是否有效
+    subject = get_subject(int(subject_id))
+    if not subject:
+        return jsonify({"success": False, "message": "无法获取该 Bangumi ID 的信息"}), 400
+
+    feed = config['feeds'][feed_id]
+    feed['bangumi_subject_id'] = int(subject_id)
+    feed['bangumi_name_cn'] = subject.get('name_cn', '')
+    save_config(config)
+
+    return jsonify({"success": True, "subject": subject})
+
+
+# ── 缺集检测（所有 feed） ─────────────────────────────
+
+@app.route('/api/feeds/missing')
+@login_required
+def feeds_missing():
+    """检查所有 feed 的缺集情况（5分钟缓存）"""
+    config = load_config()
+
+    feeds = config.get('feeds', [])
+    if not feeds:
+        return jsonify({"success": True, "feeds": []})
+
+    # 检查是否已缓存且未过期（5分钟）
+    now = time.time()
+    if _missing_cache and (now - _missing_cache_time) < 300:
+        return jsonify({"success": True, "feeds": _missing_cache, "cached": True})
+
+    proxy = config.get('proxy', {})
+    results = []
+    updated_config = False
+
+    for feed in feeds:
+        result = detect_missing_episodes(feed, proxy)
+        if result is None and not feed.get('bangumi_subject_id'):
+            # 自动匹配失败 — 跳过，不修改配置
+            results.append({"feed_id": len(results), "matched": False, "missing": []})
+            continue
+
+        if result:
+            # 如果自动匹配到了新的 bangumi_id，写回配置
+            if not feed.get('bangumi_subject_id') and result.get('bangumi_subject_id'):
+                feed['bangumi_subject_id'] = result['bangumi_subject_id']
+                feed['bangumi_name_cn'] = result.get('bangumi_name_cn', '')
+                updated_config = True
+            results.append({
+                "feed_id": len(results),
+                "matched": True,
+                "total_episodes": result.get('total_episodes', 0),
+                "missing": result.get('missing', []),
+                "bangumi_subject_id": result.get('bangumi_subject_id'),
+                "bangumi_name_cn": result.get('bangumi_name_cn', ''),
+            })
+        else:
+            results.append({"feed_id": len(results), "matched": False, "missing": []})
+
+    if updated_config:
+        save_config(config)
+
+    # 写缓存
+    _missing_cache.clear()
+    _missing_cache.update({r['feed_id']: r for r in results})
+    _missing_cache_time = now
+
+    return jsonify({"success": True, "feeds": results, "cached": False})
+
+
+# ── 缺集检测（单个 feed） ─────────────────────────────
+
+@app.route('/api/feeds/<int:feed_id>/missing')
+@login_required
+def feed_missing(feed_id):
+    """检查单个 feed 的缺集"""
+    config = load_config()
+    if feed_id < 0 or feed_id >= len(config.get('feeds', [])):
+        return jsonify({"success": False, "message": "无效的 Feed ID"}), 404
+
+    feed = config['feeds'][feed_id]
+    proxy = config.get('proxy', {})
+    result = detect_missing_episodes(feed, proxy)
+
+    if result is None and not feed.get('bangumi_subject_id'):
+        return jsonify({
+            "success": False,
+            "matched": False,
+            "message": "未设置 Bangumi ID 且自动搜索无结果，请手动设置"
+        })
+
+    # 自动匹配到新 ID 则保存
+    if not feed.get('bangumi_subject_id') and result and result.get('bangumi_subject_id'):
+        feed['bangumi_subject_id'] = result['bangumi_subject_id']
+        feed['bangumi_name_cn'] = result.get('bangumi_name_cn', '')
+        save_config(config)
+
+    return jsonify({"success": True, "matched": True, "result": result})
+
+
+# ── 下载单集 ─────────────────────────────────────────
+
+@app.route('/add_single_torrent', methods=['POST'])
+@login_required
+def add_single_torrent():
+    """下载单集种子到 qBittorrent"""
+    data = request.json
+    feed_id = data.get('feed_id')
+    torrent_url = data.get('torrent_url')
+    ep = data.get('ep')
+
+    if not torrent_url or feed_id is None:
+        return jsonify({"success": False, "message": "参数不完整"}), 400
+
+    config = load_config()
+    if feed_id < 0 or feed_id >= len(config.get('feeds', [])):
+        return jsonify({"success": False, "message": "无效的 Feed ID"}), 404
+
+    feed = config['feeds'][feed_id]
+    qbit_config = config.get('qbit', {})
+    category, _ = clean_category_name(feed.get('title', ''))
+    save_path_base = qbit_config.get('save_path_base', '/downloads/')
+    save_path = f"{save_path_base}{category}/"
+
+    try:
+        qbt_client = Client(
+            host=qbit_config.get('host'),
+            port=qbit_config.get('port'),
+            username=qbit_config.get('username'),
+            password=qbit_config.get('password'),
+            VERIFY_WEBUI_CERTIFICATE=False,
+            REQUESTS_ARGS={'timeout': (10, 30)}
+        )
+        qbt_client.auth_log_in()
+        qbt_client.torrents_add(urls=torrent_url, category=category, save_path=save_path)
+
+        # 记录到下载历史
+        history = load_history()
+        history.append({
+            "url": torrent_url,
+            "title": category,
+            "episodes": [ep] if ep else []
+        })
+        save_history(history)
+
+        return jsonify({"success": True, "message": f"已添加第{ep}集到下载队列"})
+    except Exception as e:
+        logger.error(f"添加单集下载失败: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
 
 @app.route('/log')
 @login_required

@@ -65,6 +65,41 @@
         .feed-card .card-footer .delete-btn { background: transparent; color: #e64980; border: 1px solid #e64980; border-radius: 6px; padding: 0.25rem 0.5rem; font-size: 0.65rem; cursor: pointer; width: 100%; transition: background 0.15s; }
         .feed-card .card-footer .delete-btn:hover { background: rgba(230,73,128,0.1); }
 
+        /* ===== 缺集徽章 ===== */
+        .feed-card .card-body .ep-badge { display: inline-block; font-size: 0.6rem; padding: 0.12rem 0.4rem; border-radius: 4px; font-weight: 600; margin-top: 0.25rem; cursor: pointer; transition: opacity 0.15s; }
+        .ep-badge.missing { background: rgba(230,73,128,0.2); color: #f06595; border: 1px solid rgba(230,73,128,0.3); }
+        .ep-badge.missing:hover { opacity: 0.8; }
+        .ep-badge.complete { background: rgba(52,211,153,0.15); color: #34d399; border: 1px solid rgba(52,211,153,0.25); cursor: default; }
+        .ep-badge.unmatched { background: rgba(250,204,21,0.15); color: #facc15; border: 1px solid rgba(250,204,21,0.25); cursor: pointer; }
+        .ep-badge.unmatched:hover { opacity: 0.8; }
+        .ep-badge.loading { background: rgba(148,163,184,0.15); color: #94a3b8; border: 1px solid rgba(148,163,184,0.25); cursor: default; font-style: italic; }
+
+        /* ===== 缺集详情弹窗 ===== */
+        .missing-list { text-align: left; max-height: 50vh; overflow-y: auto; }
+        .missing-list .ep-row { display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        .missing-list .ep-row:last-child { border-bottom: none; }
+        .missing-list .ep-num { font-weight: 600; color: #fff; font-size: 0.9rem; min-width: 3rem; }
+        .missing-list .ep-status { font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: 4px; }
+        .missing-list .ep-status.available { background: rgba(52,211,153,0.15); color: #34d399; }
+        .missing-list .ep-status.unavailable { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .missing-list .ep-dl-btn { background: linear-gradient(135deg, #e64980, #f06595); color: #fff; border: none; border-radius: 6px; padding: 0.25rem 0.6rem; font-size: 0.7rem; cursor: pointer; }
+        .missing-list .ep-dl-btn:hover { opacity: 0.85; }
+        .missing-list .ep-dl-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* ===== Bangumi 搜索 ===== */
+        .bangumi-search-input { display: flex; gap: 0.5rem; margin: 0.75rem 0; }
+        .bangumi-search-input input { flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 0.4rem 0.6rem; color: #c1c2c5; font-size: 0.8rem; outline: none; }
+        .bangumi-search-input input:focus { border-color: #e64980; }
+        .bangumi-search-input button { background: linear-gradient(135deg, #e64980, #f06595); color: #fff; border: none; border-radius: 6px; padding: 0.4rem 0.8rem; font-size: 0.75rem; cursor: pointer; white-space: nowrap; }
+        .bangumi-results { max-height: 30vh; overflow-y: auto; text-align: left; }
+        .bangumi-result-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.5rem; border-radius: 6px; cursor: pointer; transition: background 0.15s; }
+        .bangumi-result-item:hover { background: rgba(255,255,255,0.06); }
+        .bangumi-result-item img { width: 32px; height: 44px; border-radius: 4px; object-fit: cover; }
+        .bangumi-result-item .result-info { flex: 1; }
+        .bangumi-result-item .result-info .cn-name { color: #fff; font-size: 0.85rem; }
+        .bangumi-result-item .result-info .jp-name { color: #868e96; font-size: 0.7rem; }
+        .bangumi-result-item .result-info .meta { color: #868e96; font-size: 0.65rem; }
+
         /* ===== 日志 ===== */
         .log-container { height: 200px; overflow-y: scroll; background: rgba(0,0,0,0.3); font-family: 'Menlo', 'Consolas', monospace; padding: 0.75rem; border-radius: 8px; white-space: pre-wrap; font-size: 0.75rem; color: #c1c2c5; border: 1px solid rgba(255,255,255,0.06); margin-top: 0.5rem; }
 
@@ -206,6 +241,37 @@
     </div>
 </div>
 
+<!-- ===== 缺集详情弹窗 ===== -->
+<div id="missing-modal-overlay" class="modal-overlay">
+    <div class="modal-content" onclick="event.stopPropagation();" style="max-width:520px;">
+        <h3 id="missing-modal-title">缺集检测</h3>
+        <p id="missing-modal-sub" style="color:#868e96;font-size:0.8rem;margin-bottom:0.75rem;"></p>
+        <div id="missing-modal-body">
+            <div class="missing-list" id="missing-list"></div>
+        </div>
+        <div class="modal-buttons">
+            <button class="btn-modal-secondary" onclick="closeMissingModal()">关闭</button>
+            <button class="btn-modal-primary" id="download-all-missing-btn" style="display:none;" onclick="downloadAllMissing()">下载全部缺集</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Bangumi 设置弹窗 ===== -->
+<div id="bangumi-modal-overlay" class="modal-overlay">
+    <div class="modal-content" onclick="event.stopPropagation();" style="max-width:500px;">
+        <h3 id="bangumi-modal-title">设置 Bangumi 匹配</h3>
+        <p style="font-size:0.8rem;color:#868e96;">搜索番剧名称以关联 Bangumi 数据，用于缺集检测</p>
+        <div class="bangumi-search-input">
+            <input type="text" id="bangumi-search-input" placeholder="输入番剧中/日文名搜索..." onkeydown="if(event.key==='Enter'){event.preventDefault();doBangumiSearch();}">
+            <button onclick="doBangumiSearch()">搜索</button>
+        </div>
+        <div id="bangumi-results" class="bangumi-results"></div>
+        <div class="modal-buttons">
+            <button class="btn-modal-secondary" onclick="closeBangumiModal()">关闭</button>
+        </div>
+    </div>
+</div>
+
 <script>
     const qbitSettingsForm = document.getElementById('qbit-settings-form');
     const globalFiltersForm = document.getElementById('global-filters-form');
@@ -253,6 +319,7 @@
                 <div class="card-body">
                     <h6 title="${feed.title}">${feed.title}</h6>
                     <span class="subgroup">${subgroup}</span>
+                    <div class="ep-badge loading" data-feed-id="${index}" style="display:none;">检测中...</div>
                 </div>
                 <div class="card-footer">
                     <button class="delete-btn" data-id="${index}" data-title="${feed.title}">删除</button>
@@ -467,6 +534,252 @@
       if (btn) { btn.textContent = '📥 导入 OPML'; btn.disabled = false; }
       input.value = '';
     }
+
+    // ════════════════════════════════════════════════════════════
+    // 缺集检测
+    // ════════════════════════════════════════════════════════════
+
+    let missingData = {};  // feed_id -> {matched, missing, bangumi_name_cn, ...}
+    let currentMissingFeedId = null;
+    let currentBangumiFeedId = null;
+
+    // 页面加载后自动检测
+    document.addEventListener('DOMContentLoaded', function() {
+        checkMissingEpisodes();
+    });
+
+    async function checkMissingEpisodes() {
+        // 显示所有 loading badge
+        document.querySelectorAll('.ep-badge.loading').forEach(b => b.style.display = 'inline-block');
+        try {
+            const resp = await fetch('/api/feeds/missing');
+            const data = await resp.json();
+            if (!data.success) return;
+            missingData = {};
+            for (const r of (data.feeds || [])) {
+                missingData[r.feed_id] = r;
+                updateFeedBadge(r.feed_id, r);
+            }
+        } catch (e) {
+            console.error('缺集检测失败:', e);
+        }
+    }
+
+    function updateFeedBadge(feedId, result) {
+        const badge = document.querySelector(`.ep-badge[data-feed-id="${feedId}"]`);
+        if (!badge) return;
+        badge.style.display = 'inline-block';
+
+        if (!result.matched) {
+            badge.className = 'ep-badge unmatched';
+            badge.textContent = '⚠ 未匹配';
+            badge.title = '点击设置 Bangumi 匹配';
+            badge.onclick = () => openBangumiModal(feedId);
+            return;
+        }
+
+        const count = (result.missing || []).length;
+        if (count === 0) {
+            badge.className = 'ep-badge complete';
+            badge.textContent = '✓ 已追全';
+            badge.title = '所有剧集已下载完成';
+            badge.onclick = null;
+        } else {
+            const rssAvail = result.missing.filter(m => m.in_rss).length;
+            badge.className = 'ep-badge missing';
+            badge.textContent = `缺${count}集`;
+            badge.title = `缺${count}集 (RSS可下${rssAvail}集) - 点击查看详情`;
+            badge.onclick = () => openMissingModal(feedId);
+        }
+    }
+
+    function openMissingModal(feedId) {
+        currentMissingFeedId = feedId;
+        const result = missingData[feedId];
+        if (!result || !result.matched) return;
+
+        const overlay = document.getElementById('missing-modal-overlay');
+        document.getElementById('missing-modal-title').textContent =
+            `缺集检测 — ${result.bangumi_name_cn || '未知'}`;
+        document.getElementById('missing-modal-sub').textContent =
+            `共 ${result.total_episodes} 集 | 缺失 ${result.missing.length} 集`;
+
+        const listEl = document.getElementById('missing-list');
+        const missing = result.missing || [];
+        if (missing.length === 0) {
+            listEl.innerHTML = '<p style="text-align:center;color:#34d399;padding:1rem;">✓ 所有剧集已下载完成</p>';
+            document.getElementById('download-all-missing-btn').style.display = 'none';
+        } else {
+            listEl.innerHTML = missing.map(m => {
+                const statusText = m.in_rss ? 'RSS可下载' : 'RSS已无源';
+                const statusClass = m.in_rss ? 'available' : 'unavailable';
+                const dlBtn = m.in_rss
+                    ? `<button class="ep-dl-btn" onclick="downloadSingleEp(${feedId}, ${m.ep}, '${m.torrent_url}')">下载</button>`
+                    : `<button class="ep-dl-btn" disabled>无源</button>`;
+                return `<div class="ep-row">
+                    <span class="ep-num">第${m.ep}集</span>
+                    <span class="ep-status ${statusClass}">${statusText}</span>
+                    ${dlBtn}
+                </div>`;
+            }).join('');
+            const hasAvail = missing.some(m => m.in_rss);
+            document.getElementById('download-all-missing-btn').style.display = hasAvail ? 'inline-block' : 'none';
+        }
+
+        overlay.style.display = 'flex';
+    }
+
+    function closeMissingModal() {
+        document.getElementById('missing-modal-overlay').style.display = 'none';
+    }
+
+    async function downloadSingleEp(feedId, epNum, torrentUrl) {
+        if (!torrentUrl) return;
+        try {
+            const resp = await fetch('/add_single_torrent', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({feed_id: feedId, torrent_url: torrentUrl, ep: epNum})
+            });
+            const data = await resp.json();
+            if (data.success) {
+                // 重新检测
+                await checkMissingEpisodes();
+                // 如果还在弹窗，刷新弹窗
+                if (document.getElementById('missing-modal-overlay').style.display === 'flex') {
+                    openMissingModal(feedId);
+                }
+            } else {
+                alert('下载失败: ' + (data.message || '未知错误'));
+            }
+        } catch (e) {
+            alert('下载失败: ' + e.message);
+        }
+    }
+
+    async function downloadAllMissing() {
+        if (currentMissingFeedId === null) return;
+        const result = missingData[currentMissingFeedId];
+        if (!result) return;
+
+        const downloadBtn = document.getElementById('download-all-missing-btn');
+        downloadBtn.disabled = true;
+        downloadBtn.textContent = '下载中...';
+
+        const missing = result.missing.filter(m => m.in_rss);
+        let success = 0, fail = 0;
+        for (const m of missing) {
+            try {
+                const resp = await fetch('/add_single_torrent', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        feed_id: currentMissingFeedId,
+                        torrent_url: m.torrent_url,
+                        ep: m.ep
+                    })
+                });
+                const data = await resp.json();
+                if (data.success) success++;
+                else fail++;
+            } catch (e) {
+                fail++;
+            }
+        }
+
+        downloadBtn.textContent = `完成 (成功${success}, 失败${fail})`;
+        downloadBtn.disabled = false;
+
+        // 重新检测
+        await checkMissingEpisodes();
+        if (document.getElementById('missing-modal-overlay').style.display === 'flex') {
+            openMissingModal(currentMissingFeedId);
+        }
+
+        setTimeout(() => {
+            downloadBtn.textContent = '下载全部缺集';
+        }, 3000);
+    }
+
+    // ── Bangumi 匹配 ───────────────────────────────────
+
+    function openBangumiModal(feedId) {
+        currentBangumiFeedId = feedId;
+        document.getElementById('bangumi-modal-title').textContent = '设置 Bangumi 匹配';
+        document.getElementById('bangumi-search-input').value = '';
+        document.getElementById('bangumi-results').innerHTML =
+            '<p style="text-align:center;color:#868e96;padding:0.5rem;">输入番剧名称搜索</p>';
+        document.getElementById('bangumi-modal-overlay').style.display = 'flex';
+        setTimeout(() => document.getElementById('bangumi-search-input').focus(), 100);
+    }
+
+    function closeBangumiModal() {
+        document.getElementById('bangumi-modal-overlay').style.display = 'none';
+        currentBangumiFeedId = null;
+    }
+
+    async function doBangumiSearch() {
+        const keyword = document.getElementById('bangumi-search-input').value.trim();
+        if (!keyword) return;
+
+        const resultsEl = document.getElementById('bangumi-results');
+        resultsEl.innerHTML = '<p style="text-align:center;color:#868e96;padding:0.5rem;">搜索中...</p>';
+
+        try {
+            const resp = await fetch('/api/feeds/bangumi-search', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({keyword})
+            });
+            const data = await resp.json();
+            if (!data.success || !data.results.length) {
+                resultsEl.innerHTML = '<p style="text-align:center;color:#868e96;padding:0.5rem;">未找到匹配结果</p>';
+                return;
+            }
+            resultsEl.innerHTML = data.results.map(r => `
+                <div class="bangumi-result-item" onclick="selectBangumi(${r.subject_id}, '${(r.name_cn || r.name || '').replace(/'/g, "\'")}', this)">
+                    <img src="${r.image || ''}" alt="" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2232%22 height=%2244%22%3E%3Crect fill=%22%23333%22 width=%2232%22 height=%2244%22/%3E%3C/svg%3E'">
+                    <div class="result-info">
+                        <div class="cn-name">${r.name_cn || r.name}</div>
+                        <div class="jp-name">${r.name || ''}</div>
+                        <div class="meta">${r.eps || r.total_episodes || '?'} 集 · ${r.date || ''}</div>
+                    </div>
+                </div>
+            `).join('');
+        } catch (e) {
+            resultsEl.innerHTML = '<p style="text-align:center;color:#ef4444;padding:0.5rem;">搜索失败，请重试</p>';
+        }
+    }
+
+    async function selectBangumi(subjectId, nameCn, el) {
+        // 高亮选中
+        document.querySelectorAll('.bangumi-result-item').forEach(i => i.style.background = 'transparent');
+        el.style.background = 'rgba(230,73,128,0.2)';
+
+        if (currentBangumiFeedId === null) return;
+
+        try {
+            const resp = await fetch(`/api/feeds/${currentBangumiFeedId}/bangumi-set`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({bangumi_subject_id: subjectId})
+            });
+            const data = await resp.json();
+            if (data.success) {
+                closeBangumiModal();
+                // 重新检测
+                await checkMissingEpisodes();
+            } else {
+                alert('设置失败: ' + (data.message || '未知错误'));
+            }
+        } catch (e) {
+            alert('设置失败: ' + e.message);
+        }
+    }
+
+    // 点击缺集弹窗的遮罩关闭
+    document.getElementById('missing-modal-overlay').addEventListener('click', closeMissingModal);
+    document.getElementById('bangumi-modal-overlay').addEventListener('click', closeBangumiModal);
 </script>
 </body>
 </html>

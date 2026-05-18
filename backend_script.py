@@ -8,6 +8,7 @@ from qbittorrentapi import Client  # qBittorrent 的 API 客户端库
 from curl_cffi import requests as cffi_requests  # 模拟浏览器的网络请求库，用于绕过网站防火墙
 import os
 from notifier import send_notification
+from bangumi_api import extract_episode_number
 # --- 2. 全局常量 ---
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -230,8 +231,21 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notify_co
                             qbt_client.torrents_add(urls=torrent_url, category=qbit_category, save_path=save_path)
                             logger.info(f"  -> ✅ 成功添加到 qBittorrent，分类为 '{qbit_category}'。路径为 '{save_path}'")
 
-                            # 创建新的历史记录对象，包含 URL 和唯一的分类名
-                            new_history_item = {"url": torrent_url, "title": qbit_category}
+                            # 创建新的历史记录对象，包含 URL、分类名，以及从标题解析的集号
+                            ep_num = extract_episode_number(entry_title)
+                            new_history_item = {
+                                "url": torrent_url,
+                                "title": qbit_category,
+                                "episodes": [ep_num] if ep_num else []
+                            }
+                            # 兼容旧格式：如果已存在同 url 的旧条目，更新之
+                            existing = next((item for item in downloaded_history_list if item.get('url') == torrent_url), None)
+                            if existing:
+                                if 'episodes' not in existing:
+                                    existing['episodes'] = []
+                                if ep_num and ep_num not in existing['episodes']:
+                                    existing['episodes'].append(ep_num)
+                                continue  # 已存在，不再重复添加
                             if new_history_item not in downloaded_history_list:
                                 downloaded_history_list.append(new_history_item)
                             # 实时更新 URL 集合，防止在同一轮次中重复添加来自不同源的同一文件
@@ -264,3 +278,146 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notify_co
         save_history(downloaded_history_list)
 
     logger.info("--- 所有 RSS Feed 检查完成 ---")
+
+
+# ── 缺集检测 ──────────────────────────────────────────
+
+def get_downloaded_episodes(feed_title: str) -> set[int]:
+    """
+    从 downloaded_history 中获取某番剧已下载的所有集号。
+    同时兼容新旧数据格式。
+    """
+    history = load_history()
+    downloaded: set[int] = set()
+    for item in history:
+        # 匹配 classification 后的标题
+        if item.get('title') == feed_title:
+            eps = item.get('episodes', [])
+            if eps:
+                downloaded.update(eps)
+    return downloaded
+
+
+def get_rss_episodes(feed_url: str, proxy_config: dict | None = None) -> dict[int, dict]:
+    """
+    获取当前 RSS feed 中所有条目及其集号。
+    返回 {ep_number: {url, title, torrent_url}, ...}
+    """
+    result: dict[int, dict] = {}
+    proxies = proxy_config if proxy_config and proxy_config.get('http') else None
+    try:
+        resp = cffi_requests.get(feed_url, impersonate="chrome110", timeout=30, proxies=proxies)
+        if resp.status_code != 200:
+            return result
+        feed = feedparser.parse(resp.content)
+        for entry in feed.entries:
+            title = entry.get('title', '')
+            ep = extract_episode_number(title)
+            if ep is None:
+                continue
+            torrent_url = None
+            if hasattr(entry, 'enclosures') and entry.enclosures:
+                for enc in entry.enclosures:
+                    if 'application/x-bittorrent' in enc.get('type', ''):
+                        torrent_url = enc.href
+                        break
+            if not torrent_url:
+                torrent_url = entry.get('link')
+            if torrent_url:
+                result[ep] = {
+                    'url': torrent_url,
+                    'title': title,
+                }
+    except Exception as e:
+        logger.error(f"获取 RSS 剧集失败: {feed_url}: {e}")
+    return result
+
+
+def detect_missing_episodes(
+    feed_item: dict,
+    proxy_config: dict | None = None,
+) -> dict | None:
+    """
+    检测单个 feed 的缺集情况。
+    返回:
+    {
+      "total_episodes": 12,
+      "missing": [
+        {"ep": 3, "in_rss": true, "torrent_url": "..."},
+        {"ep": 5, "in_rss": false, "torrent_url": null}
+      ],
+      "bangumi_subject_id": 12345,
+      "bangumi_name_cn": "我心里危险的东西",
+      "episode_info": {3: {"title": "xxx"}, ...}  # RSS 中可获取的集的标题信息
+    }
+    或 None (Bangumi 未匹配到)
+    """
+    from bangumi_api import get_subject, get_episodes, search_subjects
+
+    feed_title = feed_item.get('title', '')
+    bangumi_id = feed_item.get('bangumi_subject_id')
+
+    # ── 1. 如果没有 bangumi_id，尝试自动匹配 ──
+    if not bangumi_id:
+        search_results = search_subjects(feed_title)
+        if not search_results:
+            logger.warning(f"缺集检测: 无法自动匹配 Bangumi ID: {feed_title}")
+            return None
+        bangumi_id = search_results[0]['subject_id']
+        # 注意：调用方负责将 bangumi_id 写回配置
+
+    # ── 2. 获取番剧信息 ──
+    subject = get_subject(bangumi_id)
+    if not subject:
+        return None
+    total_episodes = subject.get('total_episodes', 0) or subject.get('eps', 0)
+    if total_episodes == 0:
+        logger.info(f"缺集检测: Bangumi 尚无剧集数据 (subject_id={bangumi_id})")
+        # 尝试从剧集列表获取
+        bangumi_eps = get_episodes(bangumi_id)
+        if bangumi_eps:
+            total_episodes = max(e['ep'] for e in bangumi_eps)
+    if total_episodes == 0:
+        return {
+            'total_episodes': 0,
+            'missing': [],
+            'bangumi_subject_id': bangumi_id,
+            'bangumi_name_cn': subject.get('name_cn', ''),
+            'episode_info': {},
+        }
+
+    # ── 3. 获取已下载集号（从分类名匹配） ──
+    # 先通过 clean_category_name 标准化，再匹配
+    cat_name, _ = clean_category_name(feed_title)
+    downloaded_eps = get_downloaded_episodes(cat_name)
+
+    # ── 4. 获取 RSS 当前可用集 ──
+    feed_url = feed_item.get('url', '')
+    rss_eps = get_rss_episodes(feed_url, proxy_config)
+    rss_ep_numbers: set[int] = set(rss_eps.keys())
+
+    # ── 5. 计算缺集 ──
+    expected_range = set(range(1, total_episodes + 1))
+    missing_ep_numbers = expected_range - downloaded_eps
+
+    # ── 6. 构建结果 ──
+    episode_info = {}
+    missing = []
+    for ep in sorted(missing_ep_numbers):
+        in_rss = ep in rss_ep_numbers
+        entry = {
+            'ep': ep,
+            'in_rss': in_rss,
+            'torrent_url': rss_eps[ep]['url'] if in_rss else None,
+        }
+        missing.append(entry)
+        if in_rss:
+            episode_info[ep] = rss_eps[ep]
+
+    return {
+        'total_episodes': total_episodes,
+        'missing': missing,
+        'bangumi_subject_id': bangumi_id,
+        'bangumi_name_cn': subject.get('name_cn', ''),
+        'episode_info': episode_info,
+    }
