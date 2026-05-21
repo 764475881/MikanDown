@@ -253,7 +253,7 @@ def get_calendar() -> dict[int, list[dict]]:
     logger.info("Bangumi 获取当季放送日历")
     try:
         resp = cffi_requests.get(
-            f'{API_BASE}/v0/calendar',
+            f'{API_BASE}/calendar',
             impersonate='chrome124',
             timeout=15,
         )
