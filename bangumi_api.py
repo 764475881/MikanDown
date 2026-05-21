@@ -300,7 +300,7 @@ def search_mikan_rss(title_cn: str, title_jp: str, proxy: dict | None = None) ->
     """
     from urllib.parse import quote as url_quote
 
-    search_url = "https://mikanani.me/Home/Classic?searchstr={}"
+    search_url = "https://mikanani.me/Home/Search?searchstr={}"
 
     def _search(title: str, proxy: dict | None = None) -> str | None:
         cache_key = f'mikan_rss:{title.lower().strip()}'
@@ -318,7 +318,7 @@ def search_mikan_rss(title_cn: str, title_jp: str, proxy: dict | None = None) ->
             resp.raise_for_status()
 
             soup = BeautifulSoup(resp.content, 'lxml')
-            # Mikan Classic 搜索结果包含 /Home/Bangumi/{id} 链接
+            # Mikan Search 搜索结果包含 /Home/Bangumi/{id} 链接
             for a_tag in soup.find_all('a', href=re.compile(r'/Home/Bangumi/\d+')):
                 href = a_tag.get('href', '')
                 m = re.search(r'/Home/Bangumi/(\d+)', href)
