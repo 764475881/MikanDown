@@ -114,6 +114,44 @@
         .modal-buttons button { padding: 0.45rem 1rem; border-radius: 6px; font-size: 0.8rem; cursor: pointer; border: none; }
         .modal-buttons .btn-modal-secondary { background: rgba(255,255,255,0.08); color: #c1c2c5; }
         .modal-buttons .btn-modal-primary { background: linear-gradient(135deg, #e64980, #f06595); color: #fff; }
+
+        /* ===== Tab 切换 ===== */
+        .season-tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+        .season-tab { padding: 0.6rem 1.2rem; font-size: 0.9rem; color: #868e96; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; text-decoration: none; }
+        .season-tab:hover { color: #c1c2c5; }
+        .season-tab.active { color: #e64980; border-bottom-color: #e64980; font-weight: 600; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* ===== 当季番卡片网格 ===== */
+        .season-weekday-group { margin-bottom: 2rem; }
+        .season-weekday-group h3 { color: #868e96; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; padding-bottom: 0.4rem; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        .season-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; }
+        .season-card { background: #232529; border-radius: 12px; overflow: hidden; transition: transform 0.2s, box-shadow 0.2s; cursor: default; border: 1px solid rgba(255,255,255,0.06); }
+        .season-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .season-card .poster { width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block; background: #1a1b1e; }
+        .season-card .card-body { padding: 0.6rem; }
+        .season-card .card-title { color: #fff; font-size: 0.8rem; font-weight: 500; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 0.25rem; }
+        .season-card .card-title-jp { color: #6c757d; font-size: 0.65rem; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 0.35rem; }
+        .season-card .card-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
+        .season-card .card-rating { font-size: 0.7rem; color: #f59f00; }
+        .season-card .card-rating.none { color: #6c757d; }
+        .season-card .card-day { font-size: 0.65rem; background: rgba(230,73,128,0.15); color: #e64980; padding: 0.1rem 0.4rem; border-radius: 4px; }
+        .season-card .card-actions { margin-top: auto; }
+        .season-card .season-btn { width: 100%; padding: 0.4rem 0; border: none; border-radius: 6px; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; text-align: center; }
+        .season-card .season-btn.primary { background: linear-gradient(135deg, #e64980, #f06595); color: #fff; }
+        .season-card .season-btn.primary:hover { opacity: 0.85; }
+        .season-card .season-btn.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .season-card .season-btn.subscribed { background: rgba(52,211,153,0.15); color: #34d399; cursor: default; }
+        .season-card .season-btn.missing { background: rgba(255,255,255,0.06); color: #6c757d; cursor: pointer; }
+        .season-card .season-btn.missing:hover { background: rgba(255,255,255,0.1); }
+        .season-loading { text-align: center; padding: 3rem; color: #6c757d; font-size: 0.9rem; }
+
+        /* ===== 手动输入 RSS 弹窗 ===== */
+        .manual-rss-input { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+        .manual-rss-input input { flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 0.35rem 0.5rem; color: #c1c2c5; font-size: 0.75rem; outline: none; }
+        .manual-rss-input input:focus { border-color: #e64980; }
+        .manual-rss-input button { background: linear-gradient(135deg, #e64980, #f06595); color: #fff; border: none; border-radius: 6px; padding: 0.35rem 0.6rem; font-size: 0.7rem; cursor: pointer; white-space: nowrap; }
     </style>
 </head>
 <body>
@@ -802,6 +840,186 @@
     // 点击缺集弹窗的遮罩关闭
     document.getElementById('missing-modal-overlay').addEventListener('click', closeMissingModal);
     document.getElementById('bangumi-modal-overlay').addEventListener('click', closeBangumiModal);
+
+    // ===== 当季番 Tab 切换 =====
+    document.querySelectorAll('.season-tab').forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.querySelectorAll('.season-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            const target = tab.dataset.tab;
+            document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+            const targetPanel = document.getElementById('tab-' + target);
+            if (targetPanel) {
+                targetPanel.classList.add('active');
+            }
+            if (target === 'season') {
+                loadSeasonData();
+            }
+        });
+    });
+
+    // ===== 当季番数据加载与渲染 =====
+    let seasonData = null;
+
+    async function loadSeasonData(forceRefresh = false) {
+        const container = document.getElementById('season-container');
+        if (!container) return;
+        container.innerHTML = '<div class="season-loading">加载中...</div>';
+
+        try {
+            const resp = await fetch('/api/season' + (forceRefresh ? '?_=' + Date.now() : ''));
+            if (!resp.ok) {
+                container.innerHTML = '<div class="season-loading" style="color:#ef4444;">加载失败，请稍后重试</div>';
+                return;
+            }
+            seasonData = await resp.json();
+            renderSeason(seasonData);
+        } catch (e) {
+            container.innerHTML = '<div class="season-loading" style="color:#ef4444;">网络错误: ' + e.message + '</div>';
+        }
+    }
+
+    function renderSeason(data) {
+        const container = document.getElementById('season-container');
+        if (!data || data.length === 0) {
+            container.innerHTML = '<div class="season-loading">暂无当季番数据</div>';
+            return;
+        }
+
+        const weekdayNames = { 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日' };
+        let html = '';
+        let currentWeekday = null;
+        let groupItems = [];
+
+        for (const item of data) {
+            if (item.__separator__) {
+                if (currentWeekday !== null && groupItems.length > 0) {
+                    html += renderWeekdayGroup(currentWeekday, weekdayNames[currentWeekday] || '未知', groupItems);
+                }
+                currentWeekday = item.weekday;
+                groupItems = [];
+            } else {
+                groupItems.push(item);
+            }
+        }
+        if (currentWeekday !== null && groupItems.length > 0) {
+            html += renderWeekdayGroup(currentWeekday, weekdayNames[currentWeekday] || '未知', groupItems);
+        }
+
+        container.innerHTML = html || '<div class="season-loading">暂无当季番数据</div>';
+    }
+
+    function renderWeekdayGroup(weekday, label, items) {
+        let cardsHtml = '';
+        for (const item of items) {
+            const rating = item.rating || 0;
+            const ratingHtml = rating > 0
+                ? `<span class="card-rating">⭐ ${rating.toFixed(1)}</span>`
+                : `<span class="card-rating none">暂无评分</span>`;
+            const posterUrl = item.image || 'https://placehold.co/240x320/1a1b1e/6c757d?text=No+Poster';
+
+            let btnHtml = '';
+            if (item.mikan_rss_url) {
+                if (item.is_subscribed) {
+                    btnHtml = `<button class="season-btn subscribed" disabled>✓ 已追番</button>`;
+                } else {
+                    btnHtml = `<button class="season-btn primary" onclick="subscribeSeason('${item.subject_id}', '${escapeHtml(item.mikan_rss_url)}', '${escapeHtml(item.name_cn || item.name)}')">🔽 追番并下载</button>`;
+                }
+            } else {
+                btnHtml = `<button class="season-btn missing" onclick="showManualRssInput('${item.subject_id}', '${escapeHtml(item.name_cn || item.name)}')">⚠ 未匹配</button>`;
+            }
+
+            cardsHtml += `
+                <div class="season-card" data-subject-id="${item.subject_id}">
+                    <img class="poster" src="${posterUrl}" alt="${escapeHtml(item.name_cn || item.name)}" loading="lazy" onerror="this.src='https://placehold.co/240x320/1a1b1e/6c757d?text=Error'">
+                    <div class="card-body">
+                        <div class="card-title" title="${escapeHtml(item.name_cn || item.name)}">${escapeHtml(item.name_cn || '未知')}</div>
+                        <div class="card-title-jp" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
+                        <div class="card-meta">
+                            ${ratingHtml}
+                            <span class="card-day">${label}</span>
+                        </div>
+                        <div class="card-actions">
+                            ${btnHtml}
+                            <div id="manual-input-${item.subject_id}" style="display:none;" class="manual-rss-input">
+                                <input type="text" placeholder="输入 Mikan RSS 链接" id="manual-url-${item.subject_id}">
+                                <button onclick="subscribeManual('${item.subject_id}', '${escapeHtml(item.name_cn || item.name)}')">确认</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        return `
+            <div class="season-weekday-group">
+                <h3>${label}</h3>
+                <div class="season-grid">
+                    ${cardsHtml}
+                </div>
+            </div>`;
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    let subscribing = {};
+
+    async function subscribeSeason(subjectId, rssUrl, title) {
+        if (subscribing[subjectId]) return;
+        subscribing[subjectId] = true;
+
+        const card = document.querySelector(`.season-card[data-subject-id="${subjectId}"]`);
+        const btn = card ? card.querySelector('.season-btn') : null;
+        if (btn) {
+            btn.textContent = '处理中...';
+            btn.disabled = true;
+        }
+
+        try {
+            const resp = await fetch('/api/season/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rss_url: rssUrl, title: title })
+            });
+            const data = await resp.json();
+            if (btn) {
+                btn.className = 'season-btn subscribed';
+                btn.textContent = data.success ? '✓ 已追番' : data.message === '已订阅该番剧' ? '✓ 已追番' : '订阅失败';
+                btn.disabled = true;
+            }
+        } catch (e) {
+            if (btn) {
+                btn.textContent = '网络错误';
+                btn.disabled = false;
+            }
+        } finally {
+            delete subscribing[subjectId];
+        }
+    }
+
+    function showManualRssInput(subjectId, title) {
+        const container = document.getElementById('manual-input-' + subjectId);
+        if (container) {
+            container.style.display = container.style.display === 'none' ? 'flex' : 'none';
+        }
+    }
+
+    async function subscribeManual(subjectId, title) {
+        const input = document.getElementById('manual-url-' + subjectId);
+        const url = input ? input.value.trim() : '';
+        if (!url) {
+            alert('请输入 RSS 链接');
+            return;
+        }
+        await subscribeSeason(subjectId, url, title);
+    }
+
+    function refreshSeason() {
+        loadSeasonData(true);
+    }
 </script>
 </body>
 </html>
