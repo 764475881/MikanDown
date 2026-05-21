@@ -176,7 +176,10 @@ def delete_feed(feed_id):
 @app.route('/update_proxy', methods=['POST'])
 @login_required
 def update_proxy():
+    global _season_cache, _season_cache_time
     config = load_config(); http_proxy = request.form.get('http_proxy', '').strip(); config['proxy']['http'] = http_proxy; config['proxy']['https'] = http_proxy; save_config(config)
+    # 代理变更后清除季节缓存，使下次请求重新获取
+    _season_cache = None; _season_cache_time = 0
     return jsonify({"success": True})
 @app.route('/update_global_filters', methods=['POST'])
 @login_required
