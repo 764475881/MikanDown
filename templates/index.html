@@ -181,6 +181,14 @@
 <button id="sidebar-toggle" class="sidebar-toggle" title="切换侧边栏">◀</button>
 
 <main class="main-content" id="main-content">
+    <!-- Tab 导航 -->
+    <div class="season-tabs">
+        <a class="season-tab active" data-tab="subscriptions">📋 当前订阅</a>
+        <a class="season-tab" data-tab="season">📺 当季番</a>
+    </div>
+
+    <!-- 当前订阅面板 -->
+    <div id="tab-subscriptions" class="tab-content active">
     <div class="topbar">
         <h2>当前订阅列表</h2>
         <div class="topbar-actions">
@@ -216,6 +224,20 @@
     </form>
 
     <div id="feeds-container"></div>
+    </div>  <!-- /tab-subscriptions -->
+
+    <!-- 当季番面板 -->
+    <div id="tab-season" class="tab-content">
+        <div class="topbar">
+            <h2>📺 当季番</h2>
+            <div class="topbar-actions">
+                <button class="btn-sidebar-save" onclick="refreshSeason()" style="padding:0.35rem 0.7rem;font-size:0.8rem;cursor:pointer;">🔄 刷新</button>
+            </div>
+        </div>
+        <div id="season-container">
+            <div class="season-loading">加载中...</div>
+        </div>
+    </div>
 </main>
 
 <div id="add-feed-modal-overlay" class="modal-overlay">
