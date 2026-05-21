@@ -270,6 +270,8 @@ def get_calendar(proxy: dict | None = None) -> dict[int, list[dict]]:
             weekday = day_data['weekday']['id']  # 1=周一 ... 7=周日
             items = []
             for item in day_data.get('items', []):
+                if item is None:
+                    continue
                 items.append({
                     'subject_id': item['id'],
                     'name': item.get('name', ''),
