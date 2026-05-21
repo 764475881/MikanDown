@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import time
+import traceback
 from typing import Any
 
 from curl_cffi import requests as cffi_requests
@@ -259,6 +260,8 @@ def get_calendar(proxy: dict | None = None) -> dict[int, list[dict]]:
         if proxy:
             kwargs['proxies'] = proxy
         resp = cffi_requests.get(f'{API_BASE}/calendar', **kwargs)
+        if resp is None:
+            raise RuntimeError(f"curl_cffi.get() returned None (kwargs={kwargs})")
         resp.raise_for_status()
         data = resp.json()
 
@@ -281,7 +284,7 @@ def get_calendar(proxy: dict | None = None) -> dict[int, list[dict]]:
         _set_cache(cache_key, result)
         return result
     except Exception as e:
-        logger.error(f"Bangumi 获取日历失败: {e}")
+        logger.error(f"Bangumi 获取日历失败: {e}\n{traceback.format_exc()}")
         return {}
 
 
