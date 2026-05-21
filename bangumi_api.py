@@ -230,7 +230,7 @@ def extract_episode_number(title: str) -> int | None:
     return None
 
 
-def get_calendar() -> dict[int, list[dict]]:
+def get_calendar(proxy: dict | None = None) -> dict[int, list[dict]]:
     """
     获取当季放送日历。
     从 Bangumi /v0/calendar 获取，按 weekday_id(1-7) 分组返回。
@@ -252,11 +252,13 @@ def get_calendar() -> dict[int, list[dict]]:
 
     logger.info("Bangumi 获取当季放送日历")
     try:
-        resp = cffi_requests.get(
-            f'{API_BASE}/calendar',
-            impersonate='chrome124',
-            timeout=15,
-        )
+        kwargs = {
+            'impersonate': 'chrome124',
+            'timeout': 15,
+        }
+        if proxy:
+            kwargs['proxies'] = proxy
+        resp = cffi_requests.get(f'{API_BASE}/calendar', **kwargs)
         resp.raise_for_status()
         data = resp.json()
 
@@ -283,7 +285,7 @@ def get_calendar() -> dict[int, list[dict]]:
         return {}
 
 
-def search_mikan_rss(title_cn: str, title_jp: str) -> str | None:
+def search_mikan_rss(title_cn: str, title_jp: str, proxy: dict | None = None) -> str | None:
     """
     搜索 Mikan 匹配番剧的 RSS 订阅链接。
     先用中文标题搜索，失败则用日文/罗马音标题。
@@ -296,7 +298,7 @@ def search_mikan_rss(title_cn: str, title_jp: str) -> str | None:
 
     search_url = "https://mikanani.me/Home/Classic?searchstr={}"
 
-    def _search(title: str) -> str | None:
+    def _search(title: str, proxy: dict | None = None) -> str | None:
         cache_key = f'mikan_rss:{title.lower().strip()}'
         cached = _get_cached(cache_key, MIKAN_CACHE_TTL)
         if cached is not None:
@@ -305,7 +307,10 @@ def search_mikan_rss(title_cn: str, title_jp: str) -> str | None:
         try:
             full_url = search_url.format(url_quote(title))
             logger.info(f"Mikan 搜索: {title} -> {full_url}")
-            resp = cffi_requests.get(full_url, impersonate='chrome110', timeout=15)
+            kwargs = {'impersonate': 'chrome110', 'timeout': 15}
+            if proxy:
+                kwargs['proxies'] = proxy
+            resp = cffi_requests.get(full_url, **kwargs)
             resp.raise_for_status()
 
             soup = BeautifulSoup(resp.content, 'lxml')
@@ -327,12 +332,12 @@ def search_mikan_rss(title_cn: str, title_jp: str) -> str | None:
             return None
 
     # 先试中文名
-    result = _search(title_cn)
+    result = _search(title_cn, proxy)
     if result:
         return result
     # 中文没结果，试日文名
     if title_jp and title_jp != title_cn:
-        result = _search(title_jp)
+        result = _search(title_jp, proxy)
         if result:
             return result
     return None

@@ -492,15 +492,16 @@ def api_season():
     # feeds 的 RSS URL 集合
     subscribed_rss_urls = {feed['url'] for feed in config.get('feeds', [])}
 
-    # 从 Bangumi 获取日历
-    calendar = get_calendar()
+    # 从 Bangumi 获取日历（使用配置的代理）
+    proxy = config.get('proxy') if config.get('proxy', {}).get('http') else None
+    calendar = get_calendar(proxy=proxy)
 
     result = []
     weekdays = [1, 2, 3, 4, 5, 6, 7]
     for wd in weekdays:
         items = calendar.get(wd, [])
         for item in items:
-            mikan_rss_url = search_mikan_rss(item['name_cn'], item['name'])
+            mikan_rss_url = search_mikan_rss(item['name_cn'], item['name'], proxy=proxy)
             entry = {
                 'subject_id': item['subject_id'],
                 'name': item['name'],
@@ -517,8 +518,11 @@ def api_season():
         # 在星期分组间添加分隔标记
         result.append({'__separator__': True, 'weekday': wd})
 
-    _season_cache = result
-    _season_cache_time = now
+    # 只有当有实际数据时才缓存，空结果不缓存（下次刷新会重试）
+    has_data = any('__separator__' not in item for item in result)
+    if has_data:
+        _season_cache = result
+        _season_cache_time = now
     return jsonify(result)
 
 
