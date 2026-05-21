@@ -16,7 +16,7 @@ from flask import Flask, Response, render_template, request, jsonify, session, r
 from flask_apscheduler import APScheduler
 
 from backend_script import (process_all_feeds, load_history, save_history, clean_category_name, detect_missing_episodes)
-from bangumi_api import search_subjects, get_subject
+from bangumi_api import (search_subjects, get_subject, get_calendar, search_mikan_rss)
 from curl_cffi import requests as cffi_requests
 import feedparser
 from qbittorrentapi import Client
@@ -54,7 +54,7 @@ def check_for_setup():
     has_feeds = len(config.get('feeds', [])) > 0
     # 如果 auth 和 qbit 都设置了，向导即可视为完成；订阅可稍后添加
     wizard_complete = password_is_set and qbit_is_set
-    if not wizard_complete and request.endpoint not in ['wizard', 'setup', 'static', 'login', 'api_test_qbit', 'preview_feed', 'api_status', 'update_qbit_settings', 'add_feed', 'update_global_filters', 'update_proxy', 'delete_feed', 'bangumi_search', 'bangumi_set', 'feeds_missing', 'feed_missing', 'add_single_torrent']:
+    if not wizard_complete and request.endpoint not in ['wizard', 'setup', 'static', 'login', 'api_test_qbit', 'preview_feed', 'api_status', 'update_qbit_settings', 'add_feed', 'update_global_filters', 'update_proxy', 'delete_feed', 'bangumi_search', 'bangumi_set', 'feeds_missing', 'feed_missing', 'add_single_torrent', 'api_season', 'season_subscribe']:
         return redirect(url_for('wizard'))
     if wizard_complete and request.endpoint == 'wizard':
         return redirect(url_for('index'))
@@ -471,6 +471,134 @@ def add_single_torrent():
     except Exception as e:
         logger.error(f"添加单集下载失败: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
+
+
+_season_cache: list | None = None
+_season_cache_time: float = 0
+_SEASON_CACHE_TTL = 600  # 10 分钟 → 生产环境建议 600
+
+@app.route('/api/season')
+@login_required
+def api_season():
+    """返回当季番剧列表，含 Bangumi 元数据 + Mikan RSS 链接 + 订阅状态"""
+    global _season_cache, _season_cache_time
+    now = time.time()
+
+    # 内存缓存
+    if _season_cache and (now - _season_cache_time) < _SEASON_CACHE_TTL:
+        return jsonify(_season_cache)
+
+    config = load_config()
+    # feeds 的 RSS URL 集合
+    subscribed_rss_urls = {feed['url'] for feed in config.get('feeds', [])}
+
+    # 从 Bangumi 获取日历
+    calendar = get_calendar()
+
+    result = []
+    weekdays = [1, 2, 3, 4, 5, 6, 7]
+    for wd in weekdays:
+        items = calendar.get(wd, [])
+        for item in items:
+            mikan_rss_url = search_mikan_rss(item['name_cn'], item['name'])
+            entry = {
+                'subject_id': item['subject_id'],
+                'name': item['name'],
+                'name_cn': item['name_cn'],
+                'image': item['image'],
+                'summary': item['summary'],
+                'rating': item['rating'],
+                'air_weekday': item['air_weekday'],
+                'mikan_rss_url': mikan_rss_url,
+                'is_subscribed': mikan_rss_url in subscribed_rss_urls if mikan_rss_url else False,
+            }
+            result.append(entry)
+
+        # 在星期分组间添加分隔标记
+        result.append({'__separator__': True, 'weekday': wd})
+
+    _season_cache = result
+    _season_cache_time = now
+    return jsonify(result)
+
+
+@app.route('/api/season/subscribe', methods=['POST'])
+@login_required
+def season_subscribe():
+    """订阅一部当季番剧并立即下载所有已有剧集"""
+    data = request.json
+    rss_url = data.get('rss_url')
+    title = data.get('title', '未知番剧')
+
+    if not rss_url:
+        return jsonify({"success": False, "message": "缺少 RSS URL"}), 400
+
+    config = load_config()
+
+    # 检查是否已订阅
+    if any(feed['url'] == rss_url for feed in config['feeds']):
+        return jsonify({"success": False, "message": "已订阅该番剧"}), 409
+
+    # 添加 feed（复用 add_feed 的简化逻辑）
+    try:
+        proxies_to_use = config.get('proxy') if config.get('proxy', {}).get('http') else None
+        new_feed = {
+            "url": rss_url,
+            "title": title,
+            "cover_url": "",
+            "filters": {},
+            "subgroup": ""
+        }
+
+        # 获取 subgroup 和封面
+        response_rss = cffi_requests.get(rss_url, impersonate="chrome110", proxies=proxies_to_use, timeout=30)
+        response_rss.raise_for_status()
+        feed = feedparser.parse(response_rss.content)
+        if feed.entries:
+            match = re.search(r"^[\[【]([^\]】]+)[\]】]", feed.entries[0].title)
+            if match:
+                new_feed['subgroup'] = match.group(1).strip()
+
+        # 从 URL 获取 bangumiId 获取封面
+        parsed_url = urlparse(rss_url)
+        query_params = parse_qs(parsed_url.query)
+        bangumi_id = query_params.get('bangumiId', [None])[0]
+        if bangumi_id:
+            bangumi_page_url = f"https://mikanani.me/Home/Bangumi/{bangumi_id}"
+            response_html = cffi_requests.get(bangumi_page_url, impersonate="chrome110", proxies=proxies_to_use, timeout=30)
+            soup = BeautifulSoup(response_html.content, 'lxml')
+            poster_div = soup.find('div', class_='bangumi-poster')
+            if poster_div and 'style' in poster_div.attrs:
+                style_match = re.search(r"url\('(.+?)'\)", poster_div['style'])
+                if style_match:
+                    new_feed['cover_url'] = style_match.group(1)
+
+        config['feeds'].append(new_feed)
+        save_config(config)
+
+        # 立即触发下载：在新线程中运行 process_all_feeds（只处理这个 feed）
+        def _download_new_feed():
+            try:
+                qbit = config.get('qbit', {})
+                proxy = config.get('proxy', {})
+                from backend_script import process_all_feeds
+                process_all_feeds([new_feed], proxy, qbit, logger, notify_config=config.get('notify', {}))
+            except Exception as e:
+                logger.error(f"订阅后自动下载失败: {e}")
+
+        thread = threading.Thread(target=_download_new_feed, daemon=True)
+        thread.start()
+
+        # 清除 season 缓存
+        global _season_cache, _season_cache_time
+        _season_cache = None
+        _season_cache_time = 0
+
+        return jsonify({"success": True, "message": "已订阅并开始下载"})
+    except Exception as e:
+        logger.error(f"订阅当季番失败 '{rss_url}': {e}")
+        return jsonify({"success": False, "message": f"订阅失败: {e}"}), 500
+
 
 @app.route('/log')
 @login_required
