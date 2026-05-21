@@ -16,7 +16,8 @@ from flask import Flask, Response, render_template, request, jsonify, session, r
 from flask_apscheduler import APScheduler
 
 from backend_script import (process_all_feeds, load_history, save_history, clean_category_name, detect_missing_episodes)
-from bangumi_api import (search_subjects, get_subject, get_calendar, search_mikan_rss)
+from bangumi_api import (search_subjects, get_subject, get_calendar, search_mikan_rss,
+                          get_mikan_season_list)
 from curl_cffi import requests as cffi_requests
 import feedparser
 from qbittorrentapi import Client
@@ -509,12 +510,62 @@ def api_season():
     proxy = config.get('proxy') if config.get('proxy', {}).get('http') else None
     calendar = get_calendar(proxy=proxy)
 
+    # 爬一次 Mikan 首页，获取当季所有番剧的标题→RSS 映射
+    mikan_map = get_mikan_season_list(proxy=proxy)
+
+    def match_mikan(name_cn: str, name_jp: str) -> str | None:
+        """在 mikan_map 中匹配番剧标题，返回 RSS URL 或 None"""
+        if not mikan_map:
+            return None
+
+        # 1) 精确匹配中文名
+        key = name_cn.lower().strip()
+        if key in mikan_map:
+            return mikan_map[key]
+
+        # 2) 精确匹配日文名
+        if name_jp:
+            key = name_jp.lower().strip()
+            if key in mikan_map:
+                return mikan_map[key]
+
+        # 3) 去空格匹配
+        key = name_cn.lower().replace(' ', '').replace('　', '')
+        if key in mikan_map:
+            return mikan_map[key]
+
+        # 4) 日文去空格匹配
+        if name_jp:
+            key = name_jp.lower().replace(' ', '').replace('　', '')
+            if key in mikan_map:
+                return mikan_map[key]
+
+        # 5) 子串匹配：Mikan 标题包含中文名（处理长标题差异）
+        cn_lower = name_cn.lower().strip()
+        for mikan_title, rss_url in mikan_map.items():
+            if len(mikan_title) >= 4:
+                if cn_lower in mikan_title or mikan_title in cn_lower:
+                    return rss_url
+
+        # 6) 日文子串匹配
+        if name_jp:
+            jp_lower = name_jp.lower().strip()
+            for mikan_title, rss_url in mikan_map.items():
+                if len(mikan_title) >= 4:
+                    if jp_lower in mikan_title or mikan_title in jp_lower:
+                        return rss_url
+
+        return None
+
     result = []
     weekdays = [1, 2, 3, 4, 5, 6, 7]
     for wd in weekdays:
         items = calendar.get(wd, [])
         for item in items:
-            mikan_rss_url = search_mikan_rss(item['name_cn'], item['name'], proxy=proxy)
+            mikan_rss_url = match_mikan(item['name_cn'], item['name'])
+            # 首页没匹配到，退回到逐个搜索（长标题可能首页没有）
+            if not mikan_rss_url:
+                mikan_rss_url = search_mikan_rss(item['name_cn'], item['name'], proxy=proxy)
             entry = {
                 'subject_id': item['subject_id'],
                 'name': item['name'],

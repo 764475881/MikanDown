@@ -375,3 +375,49 @@ def search_mikan_rss(title_cn: str, title_jp: str, proxy: dict | None = None) ->
         if result:
             return result
     return None
+
+
+def get_mikan_season_list(proxy: dict | None = None) -> dict[str, str]:
+    """
+    爬取 Mikan 首页，获取当季所有番剧的标题 → RSS URL 映射。
+    只需一次请求，避免逐个搜索。
+
+    返回: {原始标题(小写): rss_url} 字典
+    """
+    cache_key = 'mikan_homepage'
+    cached = _get_cached(cache_key, MIKAN_CACHE_TTL)
+    if cached is not None:
+        return cached
+
+    try:
+        kwargs = {'impersonate': 'chrome110', 'timeout': 15}
+        if proxy:
+            kwargs['proxies'] = proxy
+        resp = cffi_requests.get('https://mikanani.me/', **kwargs)
+        resp.raise_for_status()
+
+        soup = BeautifulSoup(resp.content, 'lxml')
+        mapping: dict[str, str] = {}
+
+        for li in soup.select('li'):
+            span = li.find('span', attrs={'data-bangumiid': True})
+            link = li.find('a', href=re.compile(r'/Home/Bangumi/\d+'))
+            if span and link:
+                bangumi_id = span['data-bangumiid']
+                title = link.get_text(strip=True)
+                if title and bangumi_id:
+                    rss_url = f"https://mikanani.me/RSS/Bangumi?bangumiId={bangumi_id}"
+                    mapping[title.lower().strip()] = rss_url
+
+        logger.info(f"Mikan 首页: 爬取到 {len(mapping)} 个番剧")
+        _set_cache(cache_key, mapping)
+
+        # 同时预热单个搜索缓存，后续 search_mikan_rss 也能受益
+        for title_lower, rss_url in mapping.items():
+            _set_cache(f'mikan_rss:{title_lower}', rss_url)
+            _set_cache(f'mikan_rss:{title_lower.replace(" ", "").replace("　", "")}', rss_url)
+
+        return mapping
+    except Exception as e:
+        logger.error(f"Mikan 首页爬取失败: {e}")
+        return {}
