@@ -359,6 +359,16 @@ def search_mikan_rss(title_cn: str, title_jp: str, proxy: dict | None = None) ->
     result = _search(title_cn, proxy)
     if result:
         return result
+
+    # 中文名太长搜不到？Mikan 搜索有关键字数限制，尝试截断末尾
+    if title_cn and len(title_cn) >= 8:
+        for truncate_len in range(len(title_cn) - 2, 5, -2):  # 逐次去掉末尾2个字
+            short_title = title_cn[:truncate_len]
+            logger.info(f"Mikan 截断搜索: {short_title}")
+            result = _search(short_title, proxy)
+            if result:
+                return result
+
     # 中文没结果，试日文名
     if title_jp and title_jp != title_cn:
         result = _search(title_jp, proxy)
