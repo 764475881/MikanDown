@@ -8,6 +8,7 @@ import time
 from typing import Any
 
 from curl_cffi import requests as cffi_requests
+from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,8 @@ API_BASE = 'https://api.bgm.tv'
 SUBJECT_CACHE_TTL = 86400          # 24h — 番剧基本信息
 EPISODES_CACHE_TTL = 43200        # 12h — 剧集列表
 SEARCH_CACHE_TTL = 86400           # 24h — 搜索结果
+CALENDAR_CACHE_TTL = 21600          # 6h — 当季放送日历
+MIKAN_CACHE_TTL = 86400            # 24h — Mikan 搜索匹配结果
 
 # ── 缓存结构 ──────────────────────────────────────────
 # bangumi_cache.json:
@@ -224,4 +227,112 @@ def extract_episode_number(title: str) -> int | None:
     if m:
         return int(m.group(1))
 
+    return None
+
+
+def get_calendar() -> dict[int, list[dict]]:
+    """
+    获取当季放送日历。
+    从 Bangumi /v0/calendar 获取，按 weekday_id(1-7) 分组返回。
+    缓存 6 小时。
+
+    返回格式:
+    {
+        1: [{subject_id, name, name_cn, image, summary, rating, air_weekday}, ...],  # 周一
+        2: [...],  # 周二
+        ...
+        7: [...],  # 周日
+    }
+    """
+    cache_key = 'calendar'
+    cached = _get_cached(cache_key, CALENDAR_CACHE_TTL)
+    if cached is not None:
+        logger.info("Bangumi 日历缓存命中")
+        return cached
+
+    logger.info("Bangumi 获取当季放送日历")
+    try:
+        resp = cffi_requests.get(
+            f'{API_BASE}/v0/calendar',
+            impersonate='chrome124',
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        result: dict[int, list[dict]] = {}
+        for day_data in data:
+            weekday = day_data['weekday']['id']  # 1=周一 ... 7=周日
+            items = []
+            for item in day_data.get('items', []):
+                items.append({
+                    'subject_id': item['id'],
+                    'name': item.get('name', ''),
+                    'name_cn': item.get('name_cn', ''),
+                    'image': item.get('images', {}).get('common', ''),
+                    'summary': item.get('summary', ''),
+                    'rating': item.get('rating', {}).get('score', 0),
+                    'air_weekday': weekday,
+                })
+            result[weekday] = items
+
+        _set_cache(cache_key, result)
+        return result
+    except Exception as e:
+        logger.error(f"Bangumi 获取日历失败: {e}")
+        return {}
+
+
+def search_mikan_rss(title_cn: str, title_jp: str) -> str | None:
+    """
+    搜索 Mikan 匹配番剧的 RSS 订阅链接。
+    先用中文标题搜索，失败则用日文/罗马音标题。
+    匹配结果缓存 24 小时（按 title_cn 或 title_jp 缓存）。
+
+    返回 RSS URL 字符串，如 "https://mikanani.me/RSS/Bangumi?bangumiId=12345"。
+    未匹配到返回 None。
+    """
+    from urllib.parse import quote as url_quote
+
+    search_url = "https://mikanani.me/Home/Classic?searchstr={}"
+
+    def _search(title: str) -> str | None:
+        cache_key = f'mikan_rss:{title.lower().strip()}'
+        cached = _get_cached(cache_key, MIKAN_CACHE_TTL)
+        if cached is not None:
+            return cached
+
+        try:
+            full_url = search_url.format(url_quote(title))
+            logger.info(f"Mikan 搜索: {title} -> {full_url}")
+            resp = cffi_requests.get(full_url, impersonate='chrome110', timeout=15)
+            resp.raise_for_status()
+
+            soup = BeautifulSoup(resp.content, 'lxml')
+            # Mikan Classic 搜索结果包含 /Home/Bangumi/{id} 链接
+            for a_tag in soup.find_all('a', href=re.compile(r'/Home/Bangumi/\d+')):
+                href = a_tag.get('href', '')
+                m = re.search(r'/Home/Bangumi/(\d+)', href)
+                if m:
+                    bangumi_id = m.group(1)
+                    rss_url = f"https://mikanani.me/RSS/Bangumi?bangumiId={bangumi_id}"
+                    _set_cache(cache_key, rss_url)
+                    return rss_url
+
+            logger.info(f"Mikan 搜索未匹配: {title}")
+            _set_cache(cache_key, None)  # 缓存空结果防重复请求
+            return None
+        except Exception as e:
+            logger.error(f"Mikan 搜索失败 '{title}': {e}")
+            return None
+
+    # 先试中文名
+    result = _search(title_cn)
+    if result:
+        return result
+    # 中文没结果，试日文名
+    if title_jp and title_jp != title_cn:
+        result = _search(title_jp)
+        if result:
+            return result
     return None
