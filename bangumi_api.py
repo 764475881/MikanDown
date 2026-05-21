@@ -80,6 +80,26 @@ def _set_cache(key: str, data: Any) -> None:
     _save_cache(cache)
 
 
+def invalidate_cache(prefix: str | None = None) -> None:
+    """
+    清除缓存。
+    - prefix=None: 清空全部缓存
+    - prefix='mikan_rss:': 清除所有 Mikan 搜索缓存
+    """
+    cache = _load_cache()
+    if prefix is None:
+        _save_cache({})
+        logger.info("Bangumi 缓存已全部清空")
+        return
+    keys_to_delete = [k for k in cache if k.startswith(prefix)]
+    if not keys_to_delete:
+        return
+    for k in keys_to_delete:
+        del cache[k]
+    _save_cache(cache)
+    logger.info(f"Bangumi 缓存已清除 {len(keys_to_delete)} 条 (前缀: {prefix})")
+
+
 def search_subjects(keyword: str, limit: int = 8) -> list[dict]:
     """
     按关键字搜索番剧。

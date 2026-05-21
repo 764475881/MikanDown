@@ -487,8 +487,18 @@ def api_season():
     global _season_cache, _season_cache_time
     now = time.time()
 
-    # 内存缓存
-    if _season_cache and (now - _season_cache_time) < _SEASON_CACHE_TTL:
+    force_refresh = request.args.get('refresh') == '1'
+
+    # 强制刷新时清空相关缓存
+    if force_refresh:
+        from bangumi_api import invalidate_cache
+        invalidate_cache('calendar')
+        invalidate_cache('mikan_rss:')
+        _season_cache = None
+        _season_cache_time = 0
+
+    # 内存缓存（除非强制刷新）
+    if not force_refresh and _season_cache and (now - _season_cache_time) < _SEASON_CACHE_TTL:
         return jsonify(_season_cache)
 
     config = load_config()

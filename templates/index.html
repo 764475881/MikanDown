@@ -868,7 +868,7 @@
         container.innerHTML = '<div class="season-loading">加载中...</div>';
 
         try {
-            const resp = await fetch('/api/season' + (forceRefresh ? '?_=' + Date.now() : ''));
+            const resp = await fetch('/api/season' + (forceRefresh ? '?refresh=1&_=' + Date.now() : ''));
             if (!resp.ok) {
                 container.innerHTML = '<div class="season-loading" style="color:#ef4444;">加载失败，请稍后重试</div>';
                 return;
