@@ -275,9 +275,9 @@ def get_calendar(proxy: dict | None = None) -> dict[int, list[dict]]:
                     'subject_id': item['id'],
                     'name': item.get('name', ''),
                     'name_cn': item.get('name_cn', ''),
-                    'image': item.get('images', {}).get('common', ''),
+                    'image': (item.get('images') or {}).get('common', ''),
                     'summary': item.get('summary', ''),
-                    'rating': item.get('rating', {}).get('score', 0),
+                    'rating': (item.get('rating') or {}).get('score', 0),
                     'air_weekday': weekday,
                 })
             result[weekday] = items
