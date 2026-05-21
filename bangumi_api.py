@@ -5,7 +5,6 @@ import logging
 import os
 import re
 import time
-import traceback
 from typing import Any
 
 from curl_cffi import requests as cffi_requests
@@ -234,7 +233,7 @@ def extract_episode_number(title: str) -> int | None:
 def get_calendar(proxy: dict | None = None) -> dict[int, list[dict]]:
     """
     获取当季放送日历。
-    从 Bangumi /v0/calendar 获取，按 weekday_id(1-7) 分组返回。
+    从 Bangumi /calendar 获取，按 weekday_id(1-7) 分组返回。
     缓存 6 小时。
 
     返回格式:
@@ -286,7 +285,7 @@ def get_calendar(proxy: dict | None = None) -> dict[int, list[dict]]:
         _set_cache(cache_key, result)
         return result
     except Exception as e:
-        logger.error(f"Bangumi 获取日历失败: {e}\n{traceback.format_exc()}")
+        logger.error(f"Bangumi 获取日历失败: {e}")
         return {}
 
 
