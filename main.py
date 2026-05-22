@@ -346,6 +346,7 @@ def bangumi_set(feed_id):
 @login_required
 def feeds_missing():
     """检查所有 feed 的缺集情况（5分钟缓存）"""
+    global _missing_cache, _missing_cache_time
     config = load_config()
 
     feeds = config.get('feeds', [])
