@@ -55,7 +55,7 @@ def check_for_setup():
     has_feeds = len(config.get('feeds', [])) > 0
     # 如果 auth 和 qbit 都设置了，向导即可视为完成；订阅可稍后添加
     wizard_complete = password_is_set and qbit_is_set
-    if not wizard_complete and request.endpoint not in ['wizard', 'setup', 'static', 'login', 'api_test_qbit', 'preview_feed', 'api_status', 'update_qbit_settings', 'add_feed', 'update_global_filters', 'update_proxy', 'delete_feed', 'bangumi_search', 'bangumi_set', 'feeds_missing', 'feed_missing', 'add_single_torrent', 'api_season', 'season_subscribe']:
+    if not wizard_complete and request.endpoint not in ['wizard', 'setup', 'static', 'login', 'api_test_qbit', 'preview_feed', 'api_status', 'update_qbit_settings', 'add_feed', 'update_global_filters', 'update_proxy', 'delete_feed', 'bangumi_search', 'bangumi_set', 'feeds_missing', 'feed_missing', 'add_single_torrent', 'api_season', 'season_subscribe', 'season_preview_groups']:
         return redirect(url_for('wizard'))
     if wizard_complete and request.endpoint == 'wizard':
         return redirect(url_for('index'))
@@ -590,6 +590,45 @@ def api_season():
     return jsonify(result)
 
 
+@app.route('/api/season/preview_groups', methods=['POST'])
+@login_required
+def season_preview_groups():
+    """解析 Bangumi RSS，返回所有字幕组列表"""
+    data = request.json
+    rss_url = data.get('rss_url')
+    if not rss_url:
+        return jsonify({"success": False, "message": "缺少 RSS URL"}), 400
+
+    config = load_config()
+    proxies_to_use = config.get('proxy') if config.get('proxy', {}).get('http') else None
+
+    try:
+        resp = cffi_requests.get(rss_url, impersonate="chrome110", proxies=proxies_to_use, timeout=30)
+        resp.raise_for_status()
+        feed = feedparser.parse(resp.content)
+
+        groups: dict[str, int] = {}
+        for entry in feed.entries:
+            match = re.match(r'^[\[【]([^\]】]+)[\]】]', entry.title)
+            if match:
+                group = match.group(1).strip()
+                groups[group] = groups.get(group, 0) + 1
+
+        # 按条目数降序排列
+        sorted_groups = sorted(groups.items(), key=lambda x: -x[1])
+        group_list = [{"name": g, "count": c} for g, c in sorted_groups]
+
+        # 检查只有1个组时自动跳过
+        return jsonify({
+            "success": True,
+            "groups": group_list,
+            "single_group": group_list[0]["name"] if len(group_list) == 1 else None
+        })
+    except Exception as e:
+        logger.error(f"预览字幕组失败 '{rss_url}': {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
 @app.route('/api/season/subscribe', methods=['POST'])
 @login_required
 def season_subscribe():
@@ -597,6 +636,7 @@ def season_subscribe():
     data = request.json
     rss_url = data.get('rss_url')
     title = data.get('title', '未知番剧')
+    subgroup = data.get('subgroup', '').strip()
 
     if not rss_url:
         return jsonify({"success": False, "message": "缺少 RSS URL"}), 400
@@ -615,17 +655,22 @@ def season_subscribe():
             "title": title,
             "cover_url": "",
             "filters": {},
-            "subgroup": ""
+            "subgroup": subgroup
         }
 
-        # 获取 subgroup 和封面
-        response_rss = cffi_requests.get(rss_url, impersonate="chrome110", proxies=proxies_to_use, timeout=30)
-        response_rss.raise_for_status()
-        feed = feedparser.parse(response_rss.content)
-        if feed.entries:
-            match = re.search(r"^[\[【]([^\]】]+)[\]】]", feed.entries[0].title)
-            if match:
-                new_feed['subgroup'] = match.group(1).strip()
+        # 如果指定了字幕组，自动添加 include 过滤器
+        if subgroup:
+            new_feed['filters']['include'] = f"[{subgroup}]"
+            # 从第一个条目确认封面
+        else:
+            # 没指定则自动从 RSS 首个条目提取
+            response_rss = cffi_requests.get(rss_url, impersonate="chrome110", proxies=proxies_to_use, timeout=30)
+            response_rss.raise_for_status()
+            feed = feedparser.parse(response_rss.content)
+            if feed.entries:
+                match = re.search(r"^[\[【]([^\]】]+)[\]】]", feed.entries[0].title)
+                if match:
+                    new_feed['subgroup'] = match.group(1).strip()
 
         # 从 URL 获取 bangumiId 获取封面
         parsed_url = urlparse(rss_url)
