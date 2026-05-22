@@ -16,7 +16,7 @@ from flask import Flask, Response, render_template, request, jsonify, session, r
 from flask_apscheduler import APScheduler
 
 from backend_script import (process_all_feeds, load_history, save_history, clean_category_name, detect_missing_episodes)
-from bangumi_api import (search_subjects, get_subject, get_calendar, search_mikan_rss,
+from bangumi_api import (search_subjects, get_subject, get_calendar,
                           get_mikan_season_list)
 from curl_cffi import requests as cffi_requests
 import feedparser
@@ -484,105 +484,111 @@ _SEASON_CACHE_TTL = 600  # 10 分钟 → 生产环境建议 600
 @app.route('/api/season')
 @login_required
 def api_season():
-    """返回当季番剧列表，含 Bangumi 元数据 + Mikan RSS 链接 + 订阅状态"""
+    """以 Mikan 首页为主，Bangumi 日历仅作元数据补充"""
     global _season_cache, _season_cache_time
     now = time.time()
 
     force_refresh = request.args.get('refresh') == '1'
-
-    # 强制刷新时清空相关缓存
     if force_refresh:
         from bangumi_api import invalidate_cache
         invalidate_cache('calendar')
-        invalidate_cache('mikan_rss:')
+        invalidate_cache('mikan_homepage')
         _season_cache = None
         _season_cache_time = 0
 
-    # 内存缓存（除非强制刷新）
     if not force_refresh and _season_cache and (now - _season_cache_time) < _SEASON_CACHE_TTL:
         return jsonify(_season_cache)
 
     config = load_config()
-    # feeds 的 RSS URL 集合
+    proxy = config.get('proxy') if config.get('proxy', {}).get('http') else None
     subscribed_rss_urls = {feed['url'] for feed in config.get('feeds', [])}
 
-    # 从 Bangumi 获取日历（使用配置的代理）
-    proxy = config.get('proxy') if config.get('proxy', {}).get('http') else None
+    # 1) Mikan 首页 — 主数据源：每个番都有 RSS 链接
+    mikan_items = get_mikan_season_list(proxy=proxy)
+
+    # 2) Bangumi 日历 — 元数据补充
     calendar = get_calendar(proxy=proxy)
+    bangumi_items: list[dict] = []
+    for wd in [1, 2, 3, 4, 5, 6, 7]:
+        bangumi_items.extend(calendar.get(wd, []))
 
-    # 爬一次 Mikan 首页，获取当季所有番剧的标题→RSS 映射
-    mikan_map = get_mikan_season_list(proxy=proxy)
+    # 3) 为 Mikan 标题匹配 Bangumi 元数据
+    def find_bangumi_meta(mikan_title: str) -> dict | None:
+        """根据 Mikan 标题在 Bangumi 日历中找匹配"""
+        key = mikan_title.lower().strip()
 
-    def match_mikan(name_cn: str, name_jp: str) -> str | None:
-        """在 mikan_map 中匹配番剧标题，返回 RSS URL 或 None"""
-        if not mikan_map:
-            return None
+        # 精确匹配 name_cn
+        for b in bangumi_items:
+            if b.get('name_cn', '').lower().strip() == key:
+                return b
 
-        # 1) 精确匹配中文名
-        key = name_cn.lower().strip()
-        if key in mikan_map:
-            return mikan_map[key]
+        # 精确匹配 name
+        for b in bangumi_items:
+            if b.get('name', '').lower().strip() == key:
+                return b
 
-        # 2) 精确匹配日文名
-        if name_jp:
-            key = name_jp.lower().strip()
-            if key in mikan_map:
-                return mikan_map[key]
+        # 去空格匹配
+        key_ns = key.replace(' ', '').replace('　', '')
+        for b in bangumi_items:
+            if b.get('name_cn', '').lower().replace(' ', '').replace('　', '') == key_ns:
+                return b
+            if b.get('name', '').lower().replace(' ', '').replace('　', '') == key_ns:
+                return b
 
-        # 3) 去空格匹配
-        key = name_cn.lower().replace(' ', '').replace('　', '')
-        if key in mikan_map:
-            return mikan_map[key]
-
-        # 4) 日文去空格匹配
-        if name_jp:
-            key = name_jp.lower().replace(' ', '').replace('　', '')
-            if key in mikan_map:
-                return mikan_map[key]
-
-        # 5) 子串匹配：Mikan 标题包含中文名（处理长标题差异）
-        cn_lower = name_cn.lower().strip()
-        for mikan_title, rss_url in mikan_map.items():
-            if len(mikan_title) >= 4:
-                if cn_lower in mikan_title or mikan_title in cn_lower:
-                    return rss_url
-
-        # 6) 日文子串匹配
-        if name_jp:
-            jp_lower = name_jp.lower().strip()
-            for mikan_title, rss_url in mikan_map.items():
-                if len(mikan_title) >= 4:
-                    if jp_lower in mikan_title or mikan_title in jp_lower:
-                        return rss_url
+        # 子串匹配：Mikan 标题含中文名，或中文名含 Mikan 标题
+        for b in bangumi_items:
+            cn = b.get('name_cn', '').lower().strip()
+            if len(cn) >= 4 and (key in cn or cn in key):
+                return b
+            jp = b.get('name', '').lower().strip()
+            if len(jp) >= 4 and (key in jp or jp in key):
+                return b
 
         return None
 
-    result = []
-    weekdays = [1, 2, 3, 4, 5, 6, 7]
-    for wd in weekdays:
-        items = calendar.get(wd, [])
-        for item in items:
-            mikan_rss_url = match_mikan(item['name_cn'], item['name'])
-            # 首页没匹配到，退回到逐个搜索（长标题可能首页没有）
-            if not mikan_rss_url:
-                mikan_rss_url = search_mikan_rss(item['name_cn'], item['name'], proxy=proxy)
+    result: list = []
+    weekdays_order: dict[int, list] = {1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [], 0: []}
+
+    for mikan in mikan_items:
+        meta = find_bangumi_meta(mikan['title'])
+        rss_url = mikan['rss_url']
+
+        if meta:
             entry = {
-                'subject_id': item['subject_id'],
-                'name': item['name'],
-                'name_cn': item['name_cn'],
-                'image': item['image'],
-                'summary': item['summary'],
-                'rating': item['rating'],
-                'air_weekday': item['air_weekday'],
-                'mikan_rss_url': mikan_rss_url,
-                'is_subscribed': mikan_rss_url in subscribed_rss_urls if mikan_rss_url else False,
+                'subject_id': meta['subject_id'],
+                'name': meta['name'],
+                'name_cn': meta['name_cn'] or mikan['title'],
+                'image': meta['image'],
+                'summary': meta.get('summary', ''),
+                'rating': meta.get('rating', 0),
+                'air_weekday': meta['air_weekday'],
+                'mikan_rss_url': rss_url,
+                'is_subscribed': rss_url in subscribed_rss_urls,
             }
-            result.append(entry)
+            wd = meta['air_weekday']
+        else:
+            entry = {
+                'subject_id': 0,
+                'name': '',
+                'name_cn': mikan['title'],
+                'image': '',
+                'summary': '',
+                'rating': 0,
+                'air_weekday': 0,
+                'mikan_rss_url': rss_url,
+                'is_subscribed': rss_url in subscribed_rss_urls,
+            }
+            wd = 0
 
-        # 在星期分组间添加分隔标记
+        weekdays_order.setdefault(wd, []).append(entry)
+
+    for wd in [1, 2, 3, 4, 5, 6, 7, 0]:
+        items = weekdays_order.get(wd, [])
+        if not items:
+            continue
         result.append({'__separator__': True, 'weekday': wd})
+        result.extend(items)
 
-    # 只有当有实际数据时才缓存，空结果不缓存（下次刷新会重试）
     has_data = any('__separator__' not in item for item in result)
     if has_data:
         _season_cache = result
