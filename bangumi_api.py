@@ -408,12 +408,15 @@ def get_mikan_season_list(proxy: dict | None = None) -> list[dict]:
                 title = link.get_text(strip=True)
                 if title and bangumi_id:
                     rss_url = f"https://mikanani.me/RSS/Bangumi?bangumiId={bangumi_id}"
+                    # 海报 URL：Mikan 首页使用的懒加载 data-src
+                    poster_rel = (span.get('data-src') or '').strip()
+                    poster_url = f"https://mikanani.me{poster_rel}" if poster_rel and poster_rel.startswith('/') else ''
                     items.append({
                         'title': title,
                         'bangumi_id': int(bangumi_id),
                         'rss_url': rss_url,
+                        'mikan_poster_url': poster_url,
                     })
-
         # 同时预热单个搜索缓存
         for item in items:
             lower = item['title'].lower().strip()

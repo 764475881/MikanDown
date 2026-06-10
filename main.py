@@ -577,12 +577,15 @@ def api_season():
                         }
                         break
 
+        mikan_poster = mikan.get('mikan_poster_url', '')
+
         if meta:
             entry = {
                 'subject_id': meta['subject_id'],
                 'name': meta['name'],
                 'name_cn': meta['name_cn'] or mikan['title'],
-                'image': meta['image'],
+                'image': meta['image'] or mikan_poster,
+                'mikan_poster': mikan_poster,
                 'summary': meta.get('summary', ''),
                 'rating': meta.get('rating', 0),
                 'air_weekday': meta['air_weekday'],
@@ -595,7 +598,8 @@ def api_season():
                 'subject_id': 0,
                 'name': '',
                 'name_cn': mikan['title'],
-                'image': '',
+                'image': mikan_poster,
+                'mikan_poster': mikan_poster,
                 'summary': '',
                 'rating': 0,
                 'air_weekday': 0,
@@ -667,6 +671,7 @@ def season_subscribe():
     rss_url = data.get('rss_url')
     title = data.get('title', '未知番剧')
     subgroup = data.get('subgroup', '').strip()
+    mikan_poster = data.get('mikan_poster', '').strip()
 
     if not rss_url:
         return jsonify({"success": False, "message": "缺少 RSS URL"}), 400
@@ -683,7 +688,7 @@ def season_subscribe():
         new_feed = {
             "url": rss_url,
             "title": title,
-            "cover_url": "",
+            "cover_url": mikan_poster,  # 前端传的 Mikan 海报兜底
             "filters": {},
             "subgroup": subgroup
         }
@@ -691,7 +696,6 @@ def season_subscribe():
         # 如果指定了字幕组，自动添加 include 过滤器
         if subgroup:
             new_feed['filters']['include'] = f"[{subgroup}]"
-            # 从第一个条目确认封面
         else:
             # 没指定则自动从 RSS 首个条目提取
             response_rss = cffi_requests.get(rss_url, impersonate="chrome110", proxies=proxies_to_use, timeout=30)
@@ -702,19 +706,20 @@ def season_subscribe():
                 if match:
                     new_feed['subgroup'] = match.group(1).strip()
 
-        # 从 URL 获取 bangumiId 获取封面
-        parsed_url = urlparse(rss_url)
-        query_params = parse_qs(parsed_url.query)
-        bangumi_id = query_params.get('bangumiId', [None])[0]
-        if bangumi_id:
-            bangumi_page_url = f"https://mikanani.me/Home/Bangumi/{bangumi_id}"
-            response_html = cffi_requests.get(bangumi_page_url, impersonate="chrome110", proxies=proxies_to_use, timeout=30)
-            soup = BeautifulSoup(response_html.content, 'lxml')
-            poster_div = soup.find('div', class_='bangumi-poster')
-            if poster_div and 'style' in poster_div.attrs:
-                style_match = re.search(r"url\('(.+?)'\)", poster_div['style'])
-                if style_match:
-                    new_feed['cover_url'] = style_match.group(1)
+        # 如果没有 Mikan 海报（前端订阅或手动输入），再从 Mikan Bangumi 页面获取
+        if not new_feed['cover_url']:
+            parsed_url = urlparse(rss_url)
+            query_params = parse_qs(parsed_url.query)
+            bangumi_id = query_params.get('bangumiId', [None])[0]
+            if bangumi_id:
+                bangumi_page_url = f"https://mikanani.me/Home/Bangumi/{bangumi_id}"
+                response_html = cffi_requests.get(bangumi_page_url, impersonate="chrome110", proxies=proxies_to_use, timeout=30)
+                soup = BeautifulSoup(response_html.content, 'lxml')
+                poster_div = soup.find('div', class_='bangumi-poster')
+                if poster_div and 'style' in poster_div.attrs:
+                    style_match = re.search(r"url\('(.+?)'\)", poster_div['style'])
+                    if style_match:
+                        new_feed['cover_url'] = style_match.group(1)
 
         config['feeds'].append(new_feed)
         save_config(config)
