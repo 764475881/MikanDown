@@ -268,7 +268,8 @@ def get_calendar(proxy: dict | None = None) -> dict[int, list[dict]]:
     cached = _get_cached(cache_key, CALENDAR_CACHE_TTL)
     if cached is not None:
         logger.info("Bangumi 日历缓存命中")
-        return cached
+        # JSON 缓存会丢失 int key 类型，转回来
+        return {int(k): v for k, v in cached.items()}
 
     logger.info("Bangumi 获取当季放送日历")
     try:
