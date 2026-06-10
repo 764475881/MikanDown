@@ -554,6 +554,29 @@ def api_season():
         meta = find_bangumi_meta(mikan['title'])
         rss_url = mikan['rss_url']
 
+        # 未匹配到日历 → 尝试 Bangumi 搜索
+        if not meta:
+            search_results = search_subjects(mikan['title'])
+            if search_results:
+                # 验证搜索结果的名称与 Mikan 标题有足够重叠（仅比较中文字符，避免英日文干扰）
+                def _cjk_charset(s: str) -> set[str]:
+                    return set(re.sub(r'[^\u4e00-\u9fff]', '', s))
+                qset = _cjk_charset(mikan['title'])
+                for s in search_results:
+                    rset = _cjk_charset(s.get('name_cn') or '')
+                    overlap = len(qset & rset) / max(len(qset), len(rset), 1)
+                    if overlap >= 0.55 or len(qset) <= 2:
+                        meta = {
+                            'subject_id': s['subject_id'],
+                            'name': s['name'],
+                            'name_cn': s['name_cn'],
+                            'image': s['image'],
+                            'summary': '',
+                            'rating': 0,
+                            'air_weekday': 0,
+                        }
+                        break
+
         if meta:
             entry = {
                 'subject_id': meta['subject_id'],

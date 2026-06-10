@@ -37,6 +37,10 @@ data/config.json
 data/*.log
 data/downloaded_history.json
 
+# Cache files (generated at runtime)
+data/bangumi_cache.json
+data/*.cache.json
+
 # OS
 .DS_Store
 Thumbs.db
