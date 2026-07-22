@@ -69,7 +69,7 @@ def get_season_string(title: str) -> str | None:
     if season_number is not None:
         return f"Season {season_number}"
     else:
-        # 如果中文数字不在我们的映射中（例如“十一”），则返回 Season 1
+        # 如果中文数字不在我们的映射中（例如"十一"），则返回 Season 1
         return "Season 1"
 
 def clean_category_name(title: str) -> tuple[str, str]:
@@ -99,7 +99,39 @@ def clean_category_name(title: str) -> tuple[str, str]:
 
 def extract_save_path(download_path_base: str, category: str, session: str) -> str:
     """构造 qBittorrent 保存路径。"""
-    return f"{download_path_base}{category}/{session}/"
+    return f"{download_path_base.rstrip('/')}/{category}/{session}/"
+
+
+def get_magnet_from_torrent_url(torrent_url: str, logger) -> str | None:
+    """
+    从 Mikan 的 .torrent URL 提取 magnet link。
+    Mikan 的 .torrent 下载需要登录 Cookie，qB 无法直接获取，
+    所以我们先请求剧集页面提取 magnet link。
+    """
+    import re as _re
+    # URL pattern: /Download/YYYYMMDD/{hash}.torrent
+    m = _re.search(r'/\d{8}/([a-f0-9]{40})\.torrent', torrent_url)
+    if not m:
+        logger.warning(f"  -> ⚠️ 无法从 torrent URL 提取 episode hash: {torrent_url}")
+        return None
+    episode_hash = m.group(1)
+    page_url = f"https://mikanani.me/Home/Episode/{episode_hash}"
+    try:
+        r = cffi_requests.get(page_url, impersonate='chrome110', timeout=15)
+        if r.status_code != 200:
+            logger.warning(f"  -> ⚠️ 剧集页面返回 {r.status_code}: {page_url}")
+            return None
+        mm = _re.search(r'href=["\'](magnet:\?[^\s"\'<>]+)["\']', r.text)
+        if mm:
+            magnet = mm.group(1).replace('&amp;', '&')
+            logger.info(f"  -> ✅ 从剧集页面提取到 magnet link")
+            return magnet
+        else:
+            logger.warning(f"  -> ⚠️ 剧集页面未找到 magnet link: {page_url}")
+            return None
+    except Exception as e:
+        logger.warning(f"  -> ⚠️ 获取剧集页面失败: {e}")
+        return None
 
 
 # --- 4. 核心处理函数 ---
@@ -113,6 +145,15 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notify_co
     :param qbit_config: 包含 qBittorrent 连接信息的字典。
     :param logger: 从主应用传入的日志记录器实例。
     """
+    try:
+        _do_process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notify_config)
+    except Exception as e:
+        import traceback
+        logger.error(f"❌ process_all_feeds 异常: {e}")
+        logger.error(traceback.format_exc())
+
+
+def _do_process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notify_config=None):
     logger.info("--- 开始新一轮的 RSS 检查任务 ---")
 
     # 从传入的配置字典中安全地获取 qBittorrent 连接信息
@@ -125,7 +166,7 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notify_co
 
     # 尝试连接到 qBittorrent 客户端
     try:
-        qbt_client = Client(host=qbit_host, port=qbit_port, username=qbit_user, password=qbit_pass, VERIFY_WEBUI_CERTIFICATE=False, REQUESTS_ARGS={'timeout': (10, 30)})
+        qbt_client = Client(host=qbit_host, port=int(qbit_port) if qbit_port else 9888, username=qbit_user, password=qbit_pass, VERIFY_WEBUI_CERTIFICATE=False, REQUESTS_ARGS={'timeout': (10, 30)})
         qbt_client.auth_log_in()
         logger.info("✅ 成功连接到 qBittorrent。")
     except Exception as e:
@@ -192,8 +233,11 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notify_co
 
         try:
             # 使用 feedparser 解析获取到的 RSS 内容
+            logger.info(f"  📡 Feed 响应长度: {len(response.content)} bytes")
             feed = feedparser.parse(response.content)
+            logger.info(f"  📡 feed.entries 数量: {len(feed.entries)}")
             if not feed.entries:
+                logger.warning(f"  ⚠️ Feed 返回了 0 个条目。Feed URL: {url[:60]}...")
                 continue # 如果 Feed 中没有条目，则跳过
 
             # 倒序遍历 Feed 中的条目，通常较新的条目在前面，倒序处理可以更符合时间顺序
@@ -213,60 +257,74 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notify_co
                 if not torrent_url:
                     continue # 如果还是没有链接，则跳过此条目
 
-                # 检查这个种子链接是否已经存在于我们的历史记录中
-                # if torrent_url not in known_urls:
-                if True:
-                    # --- 核心过滤逻辑 ---
-                    # 1. 检查条目标题是否包含所有“必须包含”的关键词 (不区分大小写)
-                    is_include_match = all(k.lower() in entry_title.lower() for k in include_keywords) if include_keywords else True
+                # --- 核心过滤逻辑 ---
+                # 1. 检查条目标题是否包含所有"必须包含"的关键词 (不区分大小写)
+                is_include_match = all(k.lower() in entry_title.lower() for k in include_keywords) if include_keywords else True
 
-                    # 2. 检查条目标题是否包含任何“必须不含”的关键词 (不区分大小写)
-                    is_exclude_match = any(k.lower() in entry_title.lower() for k in exclude_keywords) if exclude_keywords else False
+                # 2. 检查条目标题是否包含任何"必须不含"的关键词 (不区分大小写)
+                is_exclude_match = any(k.lower() in entry_title.lower() for k in exclude_keywords) if exclude_keywords else False
 
-                    # 如果满足“必须包含”且不满足“必须不含”的条件，则判定为需要下载
-                    if is_include_match and not is_exclude_match:
-                        logger.info(f"发现新项目: {entry_title} -> [规则匹配成功]")
-                        try:
-                            # 调用 qBittorrent API 添加下载任务
-                            qbt_client.torrents_add(urls=torrent_url, category=qbit_category, save_path=save_path)
+                # 如果满足"必须包含"且不满足"必须不含"的条件，则判定为需要下载
+                if is_include_match and not is_exclude_match:
+                    # 检查这个种子链接是否已经存在于我们的历史记录中
+                    if torrent_url in known_urls:
+                        logger.info(f"  -> ⏭️  已存在历史记录，跳过: {entry_title}")
+                        continue
+                    
+                    logger.info(f"发现新项目: {entry_title} -> [规则匹配成功]")
+                    try:
+                        # Mikan 的 .torrent 下载需要登录 Cookie，qB 无法直接获取，
+                        # 所以先通过剧集页面提取 magnet link
+                        magnet_url = get_magnet_from_torrent_url(torrent_url, logger)
+                        if not magnet_url:
+                            logger.error(f"  -> ❌ 无法获取 magnet link，跳过此条目")
+                            continue
+
+                        # qB 的 torrents_add 会返回 202 但 added_torrent_ids 可能为空，
+                        # 所以用 requests 直接调用 API 检查响应体
+                        qbit_auth = (qbit_user, qbit_pass) if qbit_user and qbit_pass else None
+                        qbit_url = f"http://{qbit_host}:{qbit_port}/api/v2/torrents/add"
+                        resp = cffi_requests.post(qbit_url, auth=qbit_auth, data={
+                            'urls': magnet_url,
+                            'category': qbit_category,
+                            'savepath': save_path.rstrip('/'),
+                        })
+                        body = resp.json()
+                        
+                        if body.get('added_torrent_ids'):
                             logger.info(f"  -> ✅ 成功添加到 qBittorrent，分类为 '{qbit_category}'。路径为 '{save_path}'")
+                        else:
+                            logger.error(f"  -> ❌ qB 拒绝了该种子 (pending={body.get('pending_count')}, added={len(body.get('added_torrent_ids',[]))})")
+                            continue
 
-                            # 创建新的历史记录对象，包含 URL、分类名，以及从标题解析的集号
-                            ep_num = extract_episode_number(entry_title)
-                            new_history_item = {
-                                "url": torrent_url,
-                                "title": qbit_category,
-                                "episodes": [ep_num] if ep_num else []
-                            }
-                            # 兼容旧格式：如果已存在同 url 的旧条目，更新之
-                            existing = next((item for item in downloaded_history_list if item.get('url') == torrent_url), None)
-                            if existing:
-                                if 'episodes' not in existing:
-                                    existing['episodes'] = []
-                                if ep_num and ep_num not in existing['episodes']:
-                                    existing['episodes'].append(ep_num)
-                                continue  # 已存在，不再重复添加
-                            if new_history_item not in downloaded_history_list:
-                                downloaded_history_list.append(new_history_item)
-                            # 实时更新 URL 集合，防止在同一轮次中重复添加来自不同源的同一文件
-                            if torrent_url not in known_urls:
-                                known_urls.add(torrent_url)
+                        # 创建新的历史记录对象，包含 URL、分类名，以及从标题解析的集号
+                        ep_num = extract_episode_number(entry_title)
+                        new_history_item = {
+                            "url": torrent_url,
+                            "title": qbit_category,
+                            "episodes": [ep_num] if ep_num else []
+                        }
+                        if new_history_item not in downloaded_history_list:
+                            downloaded_history_list.append(new_history_item)
+                        # 实时更新 URL 集合，防止在同一轮次中重复添加来自不同源的同一文件
+                        if torrent_url not in known_urls:
+                            known_urls.add(torrent_url)
 
-                            new_downloads_this_run += 1
+                        new_downloads_this_run += 1
 
-                            # --- 发送通知 ---
-                            if notify_config and notify_config.get('enabled', False):
-                                feed_title = feed_item.get('title', '未知番组')
-                                notify_title = f"📥 下载完成: {feed_title}"
-                                notify_message = (
-                                    f"**番组:** {feed_title}\n"
-                                    f"**集数:** {entry_title}\n"
-                                    f"**分类:** {qbit_category}\n"
-                                    f"**保存路径:** {save_path}"
-                                )
-                                send_notification(notify_title, notify_message, notify_config, logger)
-                        except Exception as e:
-                            logger.error(f"  -> ❌ 添加到 qBittorrent 失败: {e}")
+                        # --- 发送通知 ---
+                        if notify_config and notify_config.get('enabled', False):
+                            feed_title = feed_item.get('title', '未知番组')
+                            notify_title = f"📥 下载完成: {feed_title}"
+                            notify_message = (
+                                f"**番组:** {feed_title}\n"
+                                f"**集数:** {entry_title}\n"
+                                f"**分类:** {qbit_category}\n"
+                                f"**保存路径:** {save_path}"
+                            )
+                            send_notification(notify_title, notify_message, notify_config, logger)
+                    except Exception as e:
+                        logger.error(f"  -> ❌ 添加到 qBittorrent 失败: {e}")
         except Exception as e:
             logger.error(f"解析 Feed 或添加任务时发生内部错误: {e}")
 
@@ -298,7 +356,7 @@ def get_downloaded_episodes(feed_title: str) -> set[int]:
     return downloaded
 
 
-def get_rss_episodes(feed_url: str, proxy_config: dict | None = None) -> dict[int, dict]:
+def get_rss_episodes(feed_url: str, proxy_config: dict | None = None, logger=None) -> dict[int, dict]:
     """
     获取当前 RSS feed 中所有条目及其集号。
     返回 {ep_number: {url, title, torrent_url}, ...}
@@ -329,13 +387,17 @@ def get_rss_episodes(feed_url: str, proxy_config: dict | None = None) -> dict[in
                     'title': title,
                 }
     except Exception as e:
-        logger.error(f"获取 RSS 剧集失败: {feed_url}: {e}")
+        if logger:
+            logger.error(f"获取 RSS 剧集失败: {feed_url}: {e}")
+        else:
+            print(f"[ERROR] 获取 RSS 剧集失败: {feed_url}: {e}")
     return result
 
 
 def detect_missing_episodes(
     feed_item: dict,
     proxy_config: dict | None = None,
+    logger=None,
 ) -> dict | None:
     """
     检测单个 feed 的缺集情况。
@@ -361,7 +423,8 @@ def detect_missing_episodes(
     if not bangumi_id:
         search_results = search_subjects(feed_title)
         if not search_results:
-            logger.warning(f"缺集检测: 无法自动匹配 Bangumi ID: {feed_title}")
+            if logger:
+                logger.warning(f"缺集检测: 无法自动匹配 Bangumi ID: {feed_title}")
             return None
         bangumi_id = search_results[0]['subject_id']
         # 注意：调用方负责将 bangumi_id 写回配置
@@ -372,7 +435,8 @@ def detect_missing_episodes(
         return None
     total_episodes = subject.get('total_episodes', 0) or subject.get('eps', 0)
     if total_episodes == 0:
-        logger.info(f"缺集检测: Bangumi 尚无剧集数据 (subject_id={bangumi_id})")
+        if logger:
+            logger.info(f"缺集检测: Bangumi 尚无剧集数据 (subject_id={bangumi_id})")
         # 尝试从剧集列表获取
         bangumi_eps = get_episodes(bangumi_id)
         if bangumi_eps:
@@ -393,7 +457,7 @@ def detect_missing_episodes(
 
     # ── 4. 获取 RSS 当前可用集 ──
     feed_url = feed_item.get('url', '')
-    rss_eps = get_rss_episodes(feed_url, proxy_config)
+    rss_eps = get_rss_episodes(feed_url, proxy_config, logger)
     rss_ep_numbers: set[int] = set(rss_eps.keys())
 
     # ── 5. 计算缺集 ──

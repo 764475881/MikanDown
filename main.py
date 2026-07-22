@@ -166,7 +166,7 @@ def delete_feed(feed_id):
 
         if should_delete_files and qbit_category_to_delete:
             try:
-                qbt_client = Client(host=qbit_config.get('host'), port=qbit_config.get('port'), username=qbit_config.get('username'), password=qbit_config.get('password'), VERIFY_WEBUI_CERTIFICATE=False, REQUESTS_ARGS={'timeout': (10, 30)}); qbt_client.auth_log_in(); torrents = qbt_client.torrents_info(category=qbit_category_to_delete)
+                qbt_client = _build_qbit_client(qbit_config); qbt_client.auth_log_in(); torrents = qbt_client.torrents_info(category=qbit_category_to_delete)
                 if torrents: qbt_client.torrents_delete(delete_files=True, torrent_hashes=[t.hash for t in torrents])
                 qbt_client.torrents_remove_categories(categories=qbit_category_to_delete); history_list = load_history(); updated_history = [item for item in history_list if item.get('title') != qbit_category_to_delete]
                 if len(history_list) != len(updated_history): save_history(updated_history)
@@ -194,15 +194,33 @@ def update_global_filters():
 def update_qbit_settings():
     config = load_config();
     if 'qbit' not in config: config['qbit'] = {}
-    config['qbit']['host'] = request.form.get('qbit_host'); config['qbit']['port'] = request.form.get('qbit_port'); config['qbit']['username'] = request.form.get('qbit_username'); config['qbit']['password'] = request.form.get('qbit_password'); config['qbit']['save_path_base'] = request.form.get('qbit_save_path'); save_config(config)
+    config['qbit']['host'] = request.form.get('qbit_host'); config['qbit']['port'] = int(request.form.get('qbit_port') or 9888); config['qbit']['username'] = request.form.get('qbit_username'); config['qbit']['password'] = request.form.get('qbit_password'); config['qbit']['save_path_base'] = request.form.get('qbit_save_path'); save_config(config)
     return jsonify({"success": True})
+
+def _build_qbit_client(qbit_config):
+    """构建 qBittorrent 客户端，自动处理 port 类型转换"""
+    return Client(
+        host=qbit_config.get('host'),
+        port=int(qbit_config.get('port', 9888)),
+        username=qbit_config.get('username'),
+        password=qbit_config.get('password'),
+        VERIFY_WEBUI_CERTIFICATE=False,
+        REQUESTS_ARGS={'timeout': (10, 30)}
+    )
 
 @app.route('/api/test_qbit', methods=['POST'])
 @login_required
 def api_test_qbit():
     data = request.json
     try:
-        qbt_client = Client(host=data.get('host'), port=data.get('port'), username=data.get('username'), password=data.get('password'), VERIFY_WEBUI_CERTIFICATE=False, REQUESTS_ARGS={'timeout': (10, 30)})
+        qbt_client = Client(
+            host=data.get('host'),
+            port=int(data.get('port', 9888)),
+            username=data.get('username'),
+            password=data.get('password'),
+            VERIFY_WEBUI_CERTIFICATE=False,
+            REQUESTS_ARGS={'timeout': (10, 30)}
+        )
         qbt_client.auth_log_in()
         version = qbt_client.app.version
         return jsonify({"success": True, "version": version})
@@ -218,19 +236,20 @@ def run_script():
 def api_status():
     config = load_config()
     feed_count = len(config.get('feeds', []))
-    history_list = load_history()
-    downloaded_total = len(history_list)
+    downloaded_total = 0
     active_torrents = 0
     disk_usage = None
     try:
         qbit_config = config.get('qbit', {})
         if qbit_config.get('host'):
-            qbt_client = Client(host=qbit_config.get('host'), port=qbit_config.get('port'), username=qbit_config.get('username'), password=qbit_config.get('password'), VERIFY_WEBUI_CERTIFICATE=False, REQUESTS_ARGS={'timeout': (10, 30)})
+            qbt_client = _build_qbit_client(qbit_config)
             qbt_client.auth_log_in()
             all_torrents = qbt_client.torrents_info()
             active_torrents = len([t for t in all_torrents if t.state in ('downloading', 'queuedDL', 'stalledDL')])
+            downloaded_total = len([t for t in all_torrents if t.state == 'completed'])
     except Exception:
         active_torrents = -1
+        downloaded_total = -1
     try:
         disk_total, disk_used, disk_free = shutil.disk_usage(DATA_DIR)
         disk_usage = {"total": round(disk_total / (1024**3), 1), "used": round(disk_used / (1024**3), 1), "free": round(disk_free / (1024**3), 1), "unit": "GB"}
@@ -363,7 +382,7 @@ def feeds_missing():
     updated_config = False
 
     for feed in feeds:
-        result = detect_missing_episodes(feed, proxy)
+        result = detect_missing_episodes(feed, proxy, logger)
         if result is None and not feed.get('bangumi_subject_id'):
             # 自动匹配失败 — 跳过，不修改配置
             results.append({"feed_id": len(results), "matched": False, "missing": []})
@@ -409,7 +428,7 @@ def feed_missing(feed_id):
 
     feed = config['feeds'][feed_id]
     proxy = config.get('proxy', {})
-    result = detect_missing_episodes(feed, proxy)
+    result = detect_missing_episodes(feed, proxy, logger)
 
     if result is None and not feed.get('bangumi_subject_id'):
         return jsonify({
@@ -452,14 +471,7 @@ def add_single_torrent():
     save_path = f"{save_path_base}{category}/"
 
     try:
-        qbt_client = Client(
-            host=qbit_config.get('host'),
-            port=qbit_config.get('port'),
-            username=qbit_config.get('username'),
-            password=qbit_config.get('password'),
-            VERIFY_WEBUI_CERTIFICATE=False,
-            REQUESTS_ARGS={'timeout': (10, 30)}
-        )
+        qbt_client = _build_qbit_client(qbit_config)
         qbt_client.auth_log_in()
         qbt_client.torrents_add(urls=torrent_url, category=category, save_path=save_path)
 
