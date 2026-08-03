@@ -43,6 +43,10 @@ MIKAN_CACHE_TTL = 86400            # 24h — Mikan 搜索匹配结果
 # }
 
 
+# 内存缓存层：避免缺集检测等高频场景反复读文件
+_mem_cache: dict[str, dict] = {}
+
+
 def _load_cache() -> dict:
     """从文件加载 Bangumi 缓存"""
     try:
@@ -63,20 +67,31 @@ def _save_cache(cache: dict) -> None:
 
 
 def _get_cached(key: str, ttl: float) -> Any | None:
-    """从二级缓存读取，过期返回 None"""
+    """读取缓存：先查内存，未命中/过期再读文件。过期返回 None"""
+    # 1) 内存层
+    mem_entry = _mem_cache.get(key)
+    if mem_entry is not None:
+        if time.time() - mem_entry.get('fetched_at', 0) <= ttl:
+            return mem_entry.get('data')
+        # 内存条目过期，继续读文件（文件可能更新过）
+    # 2) 文件层
     cache = _load_cache()
     entry = cache.get(key)
     if entry is None:
         return None
     if time.time() - entry.get('fetched_at', 0) > ttl:
         return None
-    return entry.get('data')
+    data = entry.get('data')
+    _mem_cache[key] = {'data': data, 'fetched_at': entry.get('fetched_at', time.time())}
+    return data
 
 
 def _set_cache(key: str, data: Any) -> None:
-    """写入二级缓存"""
+    """写入缓存（内存 + 文件）"""
+    now = time.time()
+    _mem_cache[key] = {'data': data, 'fetched_at': now}
     cache = _load_cache()
-    cache[key] = {'data': data, 'fetched_at': time.time()}
+    cache[key] = {'data': data, 'fetched_at': now}
     _save_cache(cache)
 
 
@@ -86,9 +101,11 @@ def invalidate_cache(prefix: str | None = None) -> None:
     - prefix=None: 清空全部缓存
     - prefix='mikan_rss:': 清除所有 Mikan 搜索缓存
     """
+    global _mem_cache
     cache = _load_cache()
     if prefix is None:
         _save_cache({})
+        _mem_cache = {}
         logger.info("Bangumi 缓存已全部清空")
         return
     keys_to_delete = [k for k in cache if k.startswith(prefix)]
@@ -96,6 +113,7 @@ def invalidate_cache(prefix: str | None = None) -> None:
         return
     for k in keys_to_delete:
         del cache[k]
+    _mem_cache = {k: v for k, v in _mem_cache.items() if not k.startswith(prefix)}
     _save_cache(cache)
     logger.info(f"Bangumi 缓存已清除 {len(keys_to_delete)} 条 (前缀: {prefix})")
 
@@ -389,8 +407,8 @@ def get_mikan_season_list(proxy: dict | None = None) -> list[dict]:
     cache_key = 'mikan_homepage'
     cached = _get_cached(cache_key, MIKAN_CACHE_TTL)
     if cached is not None:
-        # 旧版本缓存缺少 weekday 字段，视为过期重新爬取
-        if cached and isinstance(cached[0], dict) and 'weekday' not in cached[0]:
+        # 旧版本缓存缺少 weekday/has_resource 字段，视为过期重新爬取
+        if cached and isinstance(cached[0], dict) and ('weekday' not in cached[0] or 'has_resource' not in cached[0]):
             cached = None
         else:
             return cached
@@ -410,6 +428,7 @@ def get_mikan_season_list(proxy: dict | None = None) -> list[dict]:
                        '剧场版': 0, 'OVA': 0, 'OVA/剧场版 (beta)': 0}
         items: list[dict] = []
         seen_ids: set[int] = set()
+        seen_titles: set[str] = set()  # 无资源番剧无 bangumi_id，用标题去重
 
         for item in soup.select('div.m-home-week-item'):
             title_el = item.select_one('.title')
@@ -421,23 +440,36 @@ def get_mikan_season_list(proxy: dict | None = None) -> list[dict]:
                 continue
             for sq in item.select('.m-week-square'):
                 a = sq.select_one('a[href*="/Home/Bangumi/"]')
-                if not a:
+                greyout = sq.select_one('.greyout') is not None
+                if a:
+                    m = re.search(r'/Home/Bangumi/(\d+)', a['href'])
+                    if not m:
+                        continue
+                    bangumi_id = int(m.group(1))
+                    if bangumi_id in seen_ids:
+                        continue
+                    seen_ids.add(bangumi_id)
+                    title = (a.get('title') or '').strip() or a.get_text(strip=True)
+                    rss_url = f"https://mikanani.me/RSS/Bangumi?bangumiId={bangumi_id}"
+                elif greyout:
+                    # 无字幕组资源的番剧：链接是 javascript:void(0)，只有标题和海报
+                    title = (a.get('title') or '').strip() if a else ''
+                    if not title:
+                        st = sq.select_one('.small-title')
+                        title = st.get_text(strip=True) if st else ''
+                    if not title or title in seen_titles:
+                        continue
+                    seen_titles.add(title)
+                    bangumi_id = None
+                    rss_url = ''
+                else:
                     continue
-                m = re.search(r'/Home/Bangumi/(\d+)', a['href'])
-                if not m:
-                    continue
-                bangumi_id = int(m.group(1))
-                if bangumi_id in seen_ids:
-                    continue
-                seen_ids.add(bangumi_id)
-                title = (a.get('title') or '').strip() or a.get_text(strip=True)
                 # 海报 URL：m-week-square 内懒加载 data-src（去掉尺寸参数）
                 poster_rel = ''
                 img = sq.select_one('img[data-src]')
                 if img:
                     poster_rel = (img['data-src'] or '').split('?')[0].strip()
                 poster_url = f"https://mikanani.me{poster_rel}" if poster_rel and poster_rel.startswith('/') else ''
-                rss_url = f"https://mikanani.me/RSS/Bangumi?bangumiId={bangumi_id}"
                 items.append({
                     'title': title,
                     'bangumi_id': bangumi_id,
@@ -445,6 +477,7 @@ def get_mikan_season_list(proxy: dict | None = None) -> list[dict]:
                     'mikan_poster_url': poster_url,
                     'weekday': weekday,
                     'last_update': '',
+                    'has_resource': bangumi_id is not None,
                 })
 
         # 2) 从"最近更新"列表（ul.an-ul）合并 last_update，按 bangumi_id 关联
@@ -464,8 +497,10 @@ def get_mikan_season_list(proxy: dict | None = None) -> list[dict]:
             if it['bangumi_id'] in update_map:
                 it['last_update'] = update_map[it['bangumi_id']]
 
-        # 同时预热单个搜索缓存
+        # 同时预热单个搜索缓存（仅限有资源的番剧）
         for item in items:
+            if not item.get('has_resource'):
+                continue
             lower = item['title'].lower().strip()
             _set_cache(f'mikan_rss:{lower}', item['rss_url'])
             _set_cache(f'mikan_rss:{lower.replace(" ", "").replace("　", "")}', item['rss_url'])

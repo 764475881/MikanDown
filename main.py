@@ -439,11 +439,31 @@ def feeds_missing():
     results = []
     updated_config = False
 
-    for feed in feeds:
-        result = detect_missing_episodes(feed, proxy, logger)
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    # 并行检测所有 feed 的缺集情况（网络请求是主要耗时，串行会放大延迟）
+    def _detect_one(feed):
+        try:
+            return detect_missing_episodes(feed, proxy, logger)
+        except Exception as e:
+            logger.error(f"缺集检测异常 '{feed.get('title','')}': {e}")
+            return None
+
+    detected: list[dict | None] = [None] * len(feeds)
+    with ThreadPoolExecutor(max_workers=min(6, max(1, len(feeds)))) as pool:
+        futures = {pool.submit(_detect_one, feed): idx for idx, feed in enumerate(feeds)}
+        for future in as_completed(futures):
+            idx = futures[future]
+            try:
+                detected[idx] = future.result()
+            except Exception as e:
+                logger.error(f"缺集检测线程异常: {e}")
+                detected[idx] = None
+
+    for idx, (feed, result) in enumerate(zip(feeds, detected)):
         if result is None and not feed.get('bangumi_subject_id'):
             # 自动匹配失败 — 跳过，不修改配置
-            results.append({"feed_id": len(results), "matched": False, "missing": []})
+            results.append({"feed_id": idx, "matched": False, "missing": []})
             continue
 
         if result:
@@ -453,7 +473,7 @@ def feeds_missing():
                 feed['bangumi_name_cn'] = result.get('bangumi_name_cn', '')
                 updated_config = True
             results.append({
-                "feed_id": len(results),
+                "feed_id": idx,
                 "matched": True,
                 "total_episodes": result.get('total_episodes', 0),
                 "missing": result.get('missing', []),
@@ -461,7 +481,7 @@ def feeds_missing():
                 "bangumi_name_cn": result.get('bangumi_name_cn', ''),
             })
         else:
-            results.append({"feed_id": len(results), "matched": False, "missing": []})
+            results.append({"feed_id": idx, "matched": False, "missing": []})
 
     if updated_config:
         save_config(config)
@@ -602,9 +622,15 @@ def api_season():
 
     result: list = []
     by_weekday: dict[int, list] = {}
+    noid_counter = 0
     for mikan in mikan_items:
+        if mikan.get('has_resource', True):
+            sid = mikan['bangumi_id']
+        else:
+            noid_counter += 1
+            sid = f"noid-{noid_counter}"   # 无资源番剧无 bangumi_id，用自增标识
         entry = {
-            'subject_id': mikan['bangumi_id'],   # Mikan 内部 ID，唯一，用作前端定位
+            'subject_id': sid,             # 唯一，用作前端定位
             'name': '',
             'name_cn': mikan['title'],
             'image': mikan.get('mikan_poster_url', ''),
@@ -614,6 +640,7 @@ def api_season():
             'air_weekday': mikan.get('weekday', 0),   # 1=周一 ... 7=周日, 0=剧场版
             'last_update': mikan.get('last_update', ''),   # 如 "2026/07/28"
             'mikan_rss_url': mikan['rss_url'],
+            'has_resource': mikan.get('has_resource', True),
             'is_subscribed': mikan['rss_url'] in subscribed_rss_urls,
         }
         by_weekday.setdefault(mikan.get('weekday', 0), []).append(entry)
@@ -750,7 +777,7 @@ def season_subscribe():
         _season_cache = None
         _season_cache_time = 0
 
-        return jsonify({"success": True, "message": "已订阅并开始下载"})
+        return jsonify({"success": True, "message": "已订阅并开始下载", "config": config})
     except Exception as e:
         logger.error(f"订阅当季番失败 '{rss_url}': {e}")
         return jsonify({"success": False, "message": f"订阅失败: {e}"}), 500

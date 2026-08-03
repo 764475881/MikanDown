@@ -1060,7 +1060,10 @@
             const jpName = item.name || '';
 
             let btnHtml = '';
-            if (item.mikan_rss_url) {
+            if (item.has_resource === false) {
+                // 无字幕组资源（Mikan 置灰），只能手动输入 RSS 或提示无资源
+                btnHtml = `<button class="season-btn missing" onclick="showManualRssInput('${item.subject_id}', '${escapeHtml(item.name_cn || item.name)}')">⚠ 无资源</button>`;
+            } else if (item.mikan_rss_url) {
                 if (item.is_subscribed) {
                     btnHtml = `<button class="season-btn subscribed" disabled>✓ 已追番</button>`;
                 } else {
@@ -1219,8 +1222,18 @@
                 btn.textContent = data.success ? '✓ 已追番' : (data.message === '已订阅该番剧' ? '✓ 已追番' : '订阅失败');
                 btn.disabled = true;
             }
+            if (data.success && data.config) {
+                // 同步当前订阅列表，无需刷新页面即可看到新订阅
+                initialConfig = data.config;
+                renderFeeds(data.config.feeds);
+                loadStatus();
+                showToast('✅ 已订阅并开始下载');
+            } else if (!data.success && data.message) {
+                showToast('⚠️ ' + data.message, true);
+            }
         } catch (e) {
             if (btn) { btn.textContent = '网络错误'; btn.disabled = false; }
+            showToast('⚠️ 订阅失败: ' + e.message, true);
         } finally {
             delete subscribing[subjectId];
         }

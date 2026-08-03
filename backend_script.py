@@ -369,7 +369,7 @@ def get_rss_episodes(feed_url: str, proxy_config: dict | None = None, logger=Non
     result: dict[int, dict] = {}
     proxies = proxy_config if proxy_config and proxy_config.get('http') else None
     try:
-        resp = cffi_requests.get(feed_url, impersonate="chrome110", timeout=30, proxies=proxies)
+        resp = cffi_requests.get(feed_url, impersonate="chrome110", timeout=10, proxies=proxies)
         if resp.status_code != 200:
             return result
         feed = feedparser.parse(resp.content)
