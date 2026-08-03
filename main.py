@@ -55,7 +55,7 @@ def check_for_setup():
     has_feeds = len(config.get('feeds', [])) > 0
     # 如果 auth 和 qbit 都设置了，向导即可视为完成；订阅可稍后添加
     wizard_complete = password_is_set and qbit_is_set
-    if not wizard_complete and request.endpoint not in ['wizard', 'setup', 'static', 'login', 'api_test_qbit', 'preview_feed', 'api_status', 'update_qbit_settings', 'add_feed', 'update_global_filters', 'update_proxy', 'delete_feed', 'bangumi_search', 'bangumi_set', 'feeds_missing', 'feed_missing', 'add_single_torrent', 'api_season', 'season_subscribe', 'season_preview_groups']:
+    if not wizard_complete and request.endpoint not in ['wizard', 'setup', 'static', 'login', 'api_test_qbit', 'preview_feed', 'api_status', 'update_qbit_settings', 'add_feed', 'update_global_filters', 'update_proxy', 'delete_feed', 'bangumi_search', 'bangumi_set', 'feeds_missing', 'feed_missing', 'add_single_torrent', 'api_season', 'season_subscribe', 'season_preview_groups', 'api_add_status']:
         return redirect(url_for('wizard'))
     if wizard_complete and request.endpoint == 'wizard':
         return redirect(url_for('index'))
@@ -135,25 +135,83 @@ def preview_feed():
 @login_required
 def add_feed():
     data = request.json; config = load_config(); rss_url = data.get('url')
-    if any(feed['url'] == rss_url for feed in config['feeds']): return jsonify({"success": False, "message": "Feed已存在"}), 409
-    try:
+    if not rss_url:
+        return jsonify({"success": False, "message": "缺少 RSS URL"}), 400
+    if any(feed['url'] == rss_url for feed in config['feeds']):
+        return jsonify({"success": False, "message": "Feed已存在"}), 409
+
+    new_feed_object = {
+        "url": rss_url,
+        "title": data.get('title') or rss_url,
+        "cover_url": "",
+        "filters": data.get('filters') or {},
+        "subgroup": (data.get('subgroup') or '').strip(),
+    }
+    config['feeds'].append(new_feed_object)
+    save_config(config)
+
+    with _add_tasks_lock:
+        _add_tasks[rss_url] = {'status': 'processing', 'message': '正在解析字幕组、获取海报...', 'meta': {}}
+
+    def _background_add():
+        """后台补充元数据（字幕组/海报）并立即触发下载，避免阻塞添加请求"""
         proxies_to_use = config.get('proxy') if config.get('proxy', {}).get('http') else None
-        new_feed_object = { "url": rss_url, "title": data.get('title'), "cover_url": "", "filters": data.get('filters'), "subgroup": "" }
-        response_rss = cffi_requests.get(rss_url, impersonate="chrome110", proxies=proxies_to_use, timeout=30); response_rss.raise_for_status(); feed = feedparser.parse(response_rss.content)
-        if feed.entries:
-            match = re.search(r"^[\[【]([^\]】]+)[\]】]", feed.entries[0].title)
-            if match: new_feed_object['subgroup'] = match.group(1).strip()
-        parsed_url = urlparse(rss_url); query_params = parse_qs(parsed_url.query); bangumi_id = query_params.get('bangumiId', [None])[0]
-        if bangumi_id:
-            bangumi_page_url = f"https://mikanani.me/Home/Bangumi/{bangumi_id}"; response_html = cffi_requests.get(bangumi_page_url, impersonate="chrome110", proxies=proxies_to_use, timeout=30); soup = BeautifulSoup(response_html.content, 'lxml'); poster_div = soup.find('div', class_='bangumi-poster')
-            if poster_div and 'style' in poster_div.attrs:
-                style_match = re.search(r"url\('(.+?)'\)", poster_div['style'])
-                if style_match: new_feed_object['cover_url'] = style_match.group(1)
-        config['feeds'].append(new_feed_object); save_config(config)
-        return jsonify({"success": True, "config": config})
-    except Exception as e:
-        logger.error(f"添加 Feed '{rss_url}' 时发生错误: {e}")
-        return jsonify({"success": False, "message": f"获取附加信息失败，错误: {e}"}), 500
+        status, message = 'done', '已开始自动下载'
+        try:
+            # 1) 解析 RSS 提取字幕组（若用户未指定）
+            if not new_feed_object.get('subgroup'):
+                try:
+                    response_rss = cffi_requests.get(rss_url, impersonate="chrome110", proxies=proxies_to_use, timeout=30)
+                    response_rss.raise_for_status()
+                    feed = feedparser.parse(response_rss.content)
+                    if feed.entries:
+                        match = re.search(r"^[\[【]([^\]】]+)[\]】]", feed.entries[0].title)
+                        if match:
+                            new_feed_object['subgroup'] = match.group(1).strip()
+                except Exception as e:
+                    logger.error(f"添加 Feed 后解析 RSS 失败 '{rss_url}': {e}")
+
+            # 2) 获取海报
+            parsed_url = urlparse(rss_url)
+            query_params = parse_qs(parsed_url.query)
+            bangumi_id = query_params.get('bangumiId', [None])[0]
+            if bangumi_id:
+                try:
+                    bangumi_page_url = f"https://mikanani.me/Home/Bangumi/{bangumi_id}"
+                    response_html = cffi_requests.get(bangumi_page_url, impersonate="chrome110", proxies=proxies_to_use, timeout=30)
+                    soup = BeautifulSoup(response_html.content, 'lxml')
+                    poster_div = soup.find('div', class_='bangumi-poster')
+                    if poster_div and 'style' in poster_div.attrs:
+                        style_match = re.search(r"url\('(.+?)'\)", poster_div['style'])
+                        if style_match:
+                            new_feed_object['cover_url'] = style_match.group(1)
+                except Exception as e:
+                    logger.error(f"获取海报失败 '{rss_url}': {e}")
+        except Exception as e:
+            logger.error(f"添加 Feed 后台处理异常 '{rss_url}': {e}")
+        finally:
+            save_config(config)
+
+        # 3) 立即触发下载（新线程中运行，仅处理这个 feed）——失败必须告知前端
+        try:
+            from backend_script import process_all_feeds
+            ok = process_all_feeds([new_feed_object], config.get('proxy', {}), config.get('qbit', {}), logger, notify_config=config.get('notify', {}))
+            if ok:
+                status, message = 'done', '已开始自动下载'
+            else:
+                status, message = 'failed', '无法连接 qBittorrent 或处理出错，请检查设置'
+        except Exception as e:
+            logger.error(f"添加后自动下载失败 '{rss_url}': {e}")
+            status, message = 'failed', f'自动下载失败: {e}'
+        finally:
+            with _add_tasks_lock:
+                _add_tasks[rss_url] = {'status': status, 'message': message,
+                                       'meta': {'subgroup': new_feed_object.get('subgroup', ''),
+                                                'cover_url': new_feed_object.get('cover_url', '')},
+                                       'ts': time.time()}
+
+    threading.Thread(target=_background_add, daemon=True).start()
+    return jsonify({"success": True, "config": config})
 @app.route('/delete/<int:feed_id>')
 @login_required
 def delete_feed(feed_id):
@@ -494,17 +552,40 @@ _season_cache: list | None = None
 _season_cache_time: float = 0
 _SEASON_CACHE_TTL = 600  # 10 分钟 → 生产环境建议 600
 
+# 后台添加任务状态：rss_url -> {status: processing|done|failed, message, meta}
+_add_tasks: dict[str, dict] = {}
+_add_tasks_lock = threading.Lock()
+
+@app.route('/api/add_status')
+@login_required
+def api_add_status():
+    """查询后台添加任务状态（前端轮询，保证添加流程完整可见）"""
+    url = request.args.get('url', '')
+    if not url:
+        return jsonify({'status': 'not_found'}), 400
+    with _add_tasks_lock:
+        task = _add_tasks.get(url)
+        if task is None:
+            # 顺带清理过期的终态任务，避免字典无限增长
+            now = time.time()
+            expired = [k for k, v in _add_tasks.items()
+                       if v.get('status') in ('done', 'failed') and now - v.get('ts', 0) > 1800]
+            for k in expired:
+                _add_tasks.pop(k, None)
+    if not task:
+        return jsonify({'status': 'not_found'})
+    return jsonify(task)
+
 @app.route('/api/season')
 @login_required
 def api_season():
-    """以 Mikan 首页为主，Bangumi 日历仅作元数据补充"""
+    """当季番 — 纯 Mikan 首页数据（快），不再请求 Bangumi 日历/搜索"""
     global _season_cache, _season_cache_time
     now = time.time()
 
     force_refresh = request.args.get('refresh') == '1'
     if force_refresh:
         from bangumi_api import invalidate_cache
-        invalidate_cache('calendar')
         invalidate_cache('mikan_homepage')
         _season_cache = None
         _season_cache_time = 0
@@ -516,118 +597,33 @@ def api_season():
     proxy = config.get('proxy') if config.get('proxy', {}).get('http') else None
     subscribed_rss_urls = {feed['url'] for feed in config.get('feeds', [])}
 
-    # 1) Mikan 首页 — 主数据源：每个番都有 RSS 链接
+    # 唯一数据源：Mikan 首页（当季新番，按星期几/剧场版分组，含海报 + 最新更新日期）
     mikan_items = get_mikan_season_list(proxy=proxy)
 
-    # 2) Bangumi 日历 — 元数据补充
-    calendar = get_calendar(proxy=proxy)
-    bangumi_items: list[dict] = []
-    for wd in [1, 2, 3, 4, 5, 6, 7]:
-        bangumi_items.extend(calendar.get(wd, []))
-
-    # 3) 为 Mikan 标题匹配 Bangumi 元数据
-    def find_bangumi_meta(mikan_title: str) -> dict | None:
-        """根据 Mikan 标题在 Bangumi 日历中找匹配"""
-        key = mikan_title.lower().strip()
-
-        # 精确匹配 name_cn
-        for b in bangumi_items:
-            if b.get('name_cn', '').lower().strip() == key:
-                return b
-
-        # 精确匹配 name
-        for b in bangumi_items:
-            if b.get('name', '').lower().strip() == key:
-                return b
-
-        # 去空格匹配
-        key_ns = key.replace(' ', '').replace('　', '')
-        for b in bangumi_items:
-            if b.get('name_cn', '').lower().replace(' ', '').replace('　', '') == key_ns:
-                return b
-            if b.get('name', '').lower().replace(' ', '').replace('　', '') == key_ns:
-                return b
-
-        # 子串匹配：Mikan 标题含中文名，或中文名含 Mikan 标题
-        for b in bangumi_items:
-            cn = b.get('name_cn', '').lower().strip()
-            if len(cn) >= 4 and (key in cn or cn in key):
-                return b
-            jp = b.get('name', '').lower().strip()
-            if len(jp) >= 4 and (key in jp or jp in key):
-                return b
-
-        return None
-
     result: list = []
-    weekdays_order: dict[int, list] = {1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [], 0: []}
-
+    by_weekday: dict[int, list] = {}
     for mikan in mikan_items:
-        meta = find_bangumi_meta(mikan['title'])
-        rss_url = mikan['rss_url']
+        entry = {
+            'subject_id': mikan['bangumi_id'],   # Mikan 内部 ID，唯一，用作前端定位
+            'name': '',
+            'name_cn': mikan['title'],
+            'image': mikan.get('mikan_poster_url', ''),
+            'mikan_poster': mikan.get('mikan_poster_url', ''),
+            'summary': '',
+            'rating': 0,
+            'air_weekday': mikan.get('weekday', 0),   # 1=周一 ... 7=周日, 0=剧场版
+            'last_update': mikan.get('last_update', ''),   # 如 "2026/07/28"
+            'mikan_rss_url': mikan['rss_url'],
+            'is_subscribed': mikan['rss_url'] in subscribed_rss_urls,
+        }
+        by_weekday.setdefault(mikan.get('weekday', 0), []).append(entry)
 
-        # 未匹配到日历 → 尝试 Bangumi 搜索
-        if not meta:
-            search_results = search_subjects(mikan['title'])
-            if search_results:
-                # 验证搜索结果的名称与 Mikan 标题有足够重叠（仅比较中文字符，避免英日文干扰）
-                def _cjk_charset(s: str) -> set[str]:
-                    return set(re.sub(r'[^\u4e00-\u9fff]', '', s))
-                qset = _cjk_charset(mikan['title'])
-                for s in search_results:
-                    rset = _cjk_charset(s.get('name_cn') or '')
-                    overlap = len(qset & rset) / max(len(qset), len(rset), 1)
-                    if overlap >= 0.55 or len(qset) <= 2:
-                        meta = {
-                            'subject_id': s['subject_id'],
-                            'name': s['name'],
-                            'name_cn': s['name_cn'],
-                            'image': s['image'],
-                            'summary': '',
-                            'rating': 0,
-                            'air_weekday': 0,
-                        }
-                        break
-
-        mikan_poster = mikan.get('mikan_poster_url', '')
-
-        if meta:
-            entry = {
-                'subject_id': meta['subject_id'],
-                'name': meta['name'],
-                'name_cn': meta['name_cn'] or mikan['title'],
-                'image': meta['image'] or mikan_poster,
-                'mikan_poster': mikan_poster,
-                'summary': meta.get('summary', ''),
-                'rating': meta.get('rating', 0),
-                'air_weekday': meta['air_weekday'],
-                'mikan_rss_url': rss_url,
-                'is_subscribed': rss_url in subscribed_rss_urls,
-            }
-            wd = meta['air_weekday']
-        else:
-            entry = {
-                'subject_id': 0,
-                'name': '',
-                'name_cn': mikan['title'],
-                'image': mikan_poster,
-                'mikan_poster': mikan_poster,
-                'summary': '',
-                'rating': 0,
-                'air_weekday': 0,
-                'mikan_rss_url': rss_url,
-                'is_subscribed': rss_url in subscribed_rss_urls,
-            }
-            wd = 0
-
-        weekdays_order.setdefault(wd, []).append(entry)
-
-    for wd in [1, 2, 3, 4, 5, 6, 7, 0]:
-        items = weekdays_order.get(wd, [])
-        if not items:
-            continue
-        result.append({'__separator__': True, 'weekday': wd})
-        result.extend(items)
+    # 按标准顺序分组输出：周一~周日 + 剧场版(0)，与 Mikan 首页星期分类一致
+    for wd in (1, 2, 3, 4, 5, 6, 7, 0):
+        entries = by_weekday.get(wd)
+        if entries:
+            result.append({'__separator__': True, 'weekday': wd})
+            result.extend(entries)
 
     has_data = any('__separator__' not in item for item in result)
     if has_data:

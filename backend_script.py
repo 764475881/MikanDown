@@ -144,13 +144,17 @@ def process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notify_co
     :param proxy_config: 包含代理服务器设置的字典。
     :param qbit_config: 包含 qBittorrent 连接信息的字典。
     :param logger: 从主应用传入的日志记录器实例。
+    :return: bool —— True 表示任务正常完成（含"无新项目"）；False 表示发生致命错误
+             （qBittorrent 连接失败或未捕获异常）。调用方（如添加订阅后的后台任务）
+             可据此向前端反馈真实结果，避免"误报成功"。
     """
     try:
-        _do_process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notify_config)
+        return _do_process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notify_config)
     except Exception as e:
         import traceback
         logger.error(f"❌ process_all_feeds 异常: {e}")
         logger.error(traceback.format_exc())
+        return False
 
 
 def _do_process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notify_config=None):
@@ -172,7 +176,7 @@ def _do_process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notif
     except Exception as e:
         # 如果连接失败，记录错误并中止本次任务
         logger.error(f"❌ 连接 qBittorrent 失败: {e} (请检查侧边栏中的 qBittorrent 设置)")
-        return
+        return False
 
     # 加载完整的历史记录对象列表
     downloaded_history_list = load_history()
@@ -336,6 +340,7 @@ def _do_process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notif
         save_history(downloaded_history_list)
 
     logger.info("--- 所有 RSS Feed 检查完成 ---")
+    return True
 
 
 # ── 缺集检测 ──────────────────────────────────────────

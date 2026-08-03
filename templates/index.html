@@ -105,6 +105,8 @@
 
         /* ===== 模态框 ===== */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .processing-spinner { width: 34px; height: 34px; margin: 0 auto; border: 3px solid rgba(255,255,255,0.15); border-top-color: #e64980; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
         .modal-content { background: #232529; padding: 2rem; border-radius: 12px; width: 90%; max-width: 500px; text-align: center; border: 1px solid rgba(255,255,255,0.06); }
         .modal-content h3 { color: #fff; margin: 0 0 1rem 0; font-size: 1.1rem; }
         .modal-content p { color: #c1c2c5; font-size: 0.9rem; }
@@ -152,6 +154,12 @@
         .manual-rss-input input { flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 0.35rem 0.5rem; color: #c1c2c5; font-size: 0.75rem; outline: none; }
         .manual-rss-input input:focus { border-color: #e64980; }
         .manual-rss-input button { background: linear-gradient(135deg, #e64980, #f06595); color: #fff; border: none; border-radius: 6px; padding: 0.35rem 0.6rem; font-size: 0.7rem; cursor: pointer; white-space: nowrap; }
+
+        /* ===== Toast 提示 ===== */
+        #toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 2000; display: flex; flex-direction: column; gap: 0.5rem; }
+        .toast-msg { background: #2b2d30; border: 1px solid rgba(255,255,255,0.12); border-left: 3px solid #34d399; color: #e9ecef; padding: 0.6rem 1rem; border-radius: 8px; font-size: 0.8rem; box-shadow: 0 6px 18px rgba(0,0,0,0.35); animation: toast-in 0.25s ease-out; }
+        .toast-msg.err { border-left-color: #ef4444; }
+        @keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
@@ -281,15 +289,21 @@
 <div id="add-feed-modal-overlay" class="modal-overlay">
     <div class="modal-content" onclick="event.stopPropagation();">
         <h3 id="add-modal-title">为 "Some Title" 添加订阅</h3>
-        <p>请确认或修改此订阅的过滤规则（将继承全局规则）：</p>
-        <form id="add-feed-confirm-form">
-            <input type="text" id="add-include" name="include" placeholder="必须包含 (空格分隔)">
-            <input type="text" id="add-exclude" name="exclude" placeholder="必须不含 (空格分隔)">
-            <div class="modal-buttons">
-                <button type="button" class="btn-modal-secondary" id="add-modal-cancel-btn">取消</button>
-                <button type="submit" class="btn-modal-primary">确认添加</button>
-            </div>
-        </form>
+        <div id="add-processing-view" style="display:none; text-align:center; padding:1.5rem 0;">
+            <div class="processing-spinner"></div>
+            <p id="add-processing-text" style="color:#c1c2c5; font-size:0.9rem; margin-top:1rem;">正在后台处理：解析字幕组、获取海报、自动下载...</p>
+        </div>
+        <div id="add-form-view">
+            <p>请确认或修改此订阅的过滤规则（将继承全局规则）：</p>
+            <form id="add-feed-confirm-form">
+                <input type="text" id="add-include" name="include" placeholder="必须包含 (空格分隔)">
+                <input type="text" id="add-exclude" name="exclude" placeholder="必须不含 (空格分隔)">
+                <div class="modal-buttons">
+                    <button type="button" class="btn-modal-secondary" id="add-modal-cancel-btn">取消</button>
+                    <button type="submit" class="btn-modal-primary">确认添加</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
@@ -363,19 +377,22 @@
 
     renderFeeds(initialConfig.feeds);
 
-    fetch('/api/status').then(r=>r.json()).then(d=>{
-      document.getElementById('stat-feeds').textContent = d.feed_count;
-      document.getElementById('stat-downloaded').textContent = d.downloaded_total;
-      document.getElementById('stat-torrents').textContent = d.active_torrents < 0 ? '未连接' : d.active_torrents;
-      document.getElementById('stat-disk').textContent = d.last_update || '尚未运行';
-      if (d.disk_usage) {
-        let pct = Math.round(d.disk_usage.used / d.disk_usage.total * 100);
-        document.getElementById('stat-disk').textContent = d.disk_usage.free + 'G 空闲 (' + pct + '%)';
-        document.getElementById('stat-disk-sub').textContent = '共 ' + Math.round(d.disk_usage.total/1024) + 'TB';
-      } else {
-        document.getElementById('stat-disk').textContent = '-';
-      }
-    }).catch(()=>{});
+    async function loadStatus() {
+      try {
+        const d = await fetch('/api/status').then(r=>r.json());
+        document.getElementById('stat-feeds').textContent = d.feed_count;
+        document.getElementById('stat-downloaded').textContent = d.downloaded_total < 0 ? '-' : d.downloaded_total;
+        document.getElementById('stat-torrents').textContent = d.active_torrents < 0 ? '未连接' : d.active_torrents;
+        if (d.disk_usage) {
+          let pct = Math.round(d.disk_usage.used / d.disk_usage.total * 100);
+          document.getElementById('stat-disk').textContent = d.disk_usage.free + 'G 空闲 (' + pct + '%)';
+          document.getElementById('stat-disk-sub').textContent = '共 ' + Math.round(d.disk_usage.total/1024) + 'TB';
+        } else {
+          document.getElementById('stat-disk').textContent = '-';
+        }
+      } catch(e) {}
+    }
+    loadStatus();
 
     function renderFeeds(feeds) {
         if (!feeds || feeds.length === 0) {
@@ -447,28 +464,105 @@
     document.getElementById('add-feed-confirm-form').addEventListener('submit', async (event) => {
         event.preventDefault();
         const btn = event.target.querySelector('button[type="submit"]');
+        btn.disabled = true;
         btn.setAttribute('aria-busy', 'true');
+        btn.textContent = '添加中...';
         const filters = {
             include: document.getElementById('add-include').value,
             exclude: document.getElementById('add-exclude').value,
         };
         const payload = { url: currentRssUrlToAdd, title: currentRssTitleToAdd, filters: filters };
-        const response = await fetch('/add', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const data = await response.json();
-        if (data.success) {
-            initialConfig = data.config;
-            renderFeeds(data.config.feeds);
-            addFeedForm.reset();
-        } else {
-            alert(`添加失败: ${data.message}`);
+        try {
+            const response = await fetch('/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            if (data.success) {
+                initialConfig = data.config;
+                renderFeeds(data.config.feeds);
+                loadStatus();
+                addFeedForm.reset();
+                // 显示后台处理中视图，轮询任务状态，保证流程完整（成功/失败都有明确反馈）
+                await waitForAddTask(currentRssUrlToAdd);
+            } else {
+                alert(`添加失败: ${data.message}`);
+            }
+        } catch(e) {
+            alert('添加时发生网络错误: ' + e.message);
         }
-        closeAddModal();
+        btn.disabled = false;
         btn.removeAttribute('aria-busy');
+        btn.textContent = '确认添加';
     });
+
+    function showAddProcessing() {
+        document.getElementById('add-form-view').style.display = 'none';
+        document.getElementById('add-processing-view').style.display = 'block';
+        document.getElementById('add-processing-text').textContent = '正在后台处理：解析字幕组、获取海报、自动下载...';
+        const cancelBtn = document.getElementById('add-modal-cancel-btn');
+        if (cancelBtn) cancelBtn.disabled = true;
+    }
+
+    function hideAddProcessing() {
+        document.getElementById('add-form-view').style.display = '';
+        document.getElementById('add-processing-view').style.display = 'none';
+        const cancelBtn = document.getElementById('add-modal-cancel-btn');
+        if (cancelBtn) cancelBtn.disabled = false;
+    }
+
+    // 轮询后台任务，直到 done / failed / 超时（120s）。失败时明确提示用户。
+    async function waitForAddTask(rssUrl) {
+        showAddProcessing();
+        const deadline = Date.now() + 120000;
+        while (Date.now() < deadline) {
+            await new Promise(r => setTimeout(r, 1500));
+            let task = null;
+            try {
+                const resp = await fetch('/api/add_status?url=' + encodeURIComponent(rssUrl));
+                task = await resp.json();
+            } catch(e) { continue; }  // 网络抖动继续轮询
+            if (!task || task.status === 'not_found') {
+                hideAddProcessing();
+                closeAddModal();
+                showToast('✅ 订阅已添加');
+                return;
+            }
+            if (task.status === 'done') {
+                applyAddMeta(rssUrl, task.meta);
+                hideAddProcessing();
+                closeAddModal();
+                showToast('✅ 订阅已添加并开始自动下载');
+                return;
+            }
+            if (task.status === 'failed') {
+                applyAddMeta(rssUrl, task.meta);
+                hideAddProcessing();
+                closeAddModal();
+                loadStatus();
+                showToast('⚠️ 订阅已保存，但自动下载失败：' + (task.message || '未知错误'), true);
+                return;
+            }
+            // processing：更新进度文案
+            const textEl = document.getElementById('add-processing-text');
+            if (textEl && task.message) textEl.textContent = task.message;
+        }
+        hideAddProcessing();
+        closeAddModal();
+        showToast('⏳ 后台任务仍在处理中，可稍后在日志查看进度', true);
+    }
+
+    // 用后台补全的元数据（字幕组/海报）更新前端订阅卡片
+    function applyAddMeta(rssUrl, meta) {
+        if (!meta || !initialConfig || !Array.isArray(initialConfig.feeds)) return;
+        const feed = initialConfig.feeds.find(f => f.url === rssUrl);
+        if (!feed) return;
+        let changed = false;
+        if (meta.subgroup && !feed.subgroup) { feed.subgroup = meta.subgroup; changed = true; }
+        if (meta.cover_url && !feed.cover_url) { feed.cover_url = meta.cover_url; changed = true; }
+        if (changed) renderFeeds(initialConfig.feeds);
+    }
 
     proxyForm.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -535,7 +629,9 @@
             if (data.success) {
                 initialConfig = data.config;
                 renderFeeds(data.config.feeds);
+                loadStatus();
                 closeModal();
+                showToast(deleteFiles ? '✅ 已全部删除（含 qBittorrent 文件）' : '✅ 已移除订阅');
             } else {
                 alert(`删除失败: ${data.message}`);
                 showStep2(currentFeedTitle);
@@ -552,15 +648,26 @@
 
     function showAddFeedModal() {
         document.getElementById('add-modal-title').innerText = `为 "${currentRssTitleToAdd}" 添加订阅`;
-        document.getElementById('add-include').value = initialConfig.filters.include;
-        document.getElementById('add-exclude').value = initialConfig.filters.exclude;
+        const flt = (initialConfig && initialConfig.filters) || {};
+        document.getElementById('add-include').value = flt.include || '';
+        document.getElementById('add-exclude').value = flt.exclude || '';
         addFeedModalOverlay.style.display = 'flex';
     }
     function closeAddModal() {
+        hideAddProcessing();
         addFeedModalOverlay.style.display = 'none';
     }
-    addFeedModalOverlay.addEventListener('click', closeAddModal);
-    document.querySelector('#add-feed-modal-overlay .modal-content .btn-modal-secondary')?.addEventListener('click', closeAddModal);
+    // 处理中（后台任务未结束）时禁止点击遮罩/取消关闭，保证流程完整
+    addFeedModalOverlay.addEventListener('click', () => {
+        if (document.getElementById('add-processing-view').style.display === 'none') {
+            closeAddModal();
+        }
+    });
+    document.querySelector('#add-feed-modal-overlay .modal-content .btn-modal-secondary')?.addEventListener('click', () => {
+        if (document.getElementById('add-processing-view').style.display === 'none') {
+            closeAddModal();
+        }
+    });
 
     const storageKey = 'sidebarCollapsed';
     if (localStorage.getItem(storageKey) === 'true') {
@@ -585,8 +692,22 @@
         eventSource.close();
     };
 
-    async function importOPML(input) {
-      if (!input.files.length) return;
+    function showToast(msg, isError = false) {
+        let container = document.getElementById('toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toast-container';
+            document.body.appendChild(container);
+        }
+        const el = document.createElement('div');
+        el.className = 'toast-msg' + (isError ? ' err' : '');
+        el.textContent = msg;
+        container.appendChild(el);
+        setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.4s'; }, 3200);
+        setTimeout(() => el.remove(), 3700);
+    }
+
+    async function importOPML(input) {      if (!input.files.length) return;
       const formData = new FormData();
       formData.append('file', input.files[0]);
       const btn = document.querySelector('.btn-sidebar-save[onclick*="opml-file-input"]');
@@ -899,7 +1020,7 @@
             return;
         }
 
-        const weekdayNames = { 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日' };
+        const weekdayNames = { 0: '剧场版', 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日' };
         let html = '';
         let currentWeekday = null;
         let groupItems = [];
@@ -930,6 +1051,13 @@
                 ? `<span class="card-rating">⭐ ${rating.toFixed(1)}</span>`
                 : `<span class="card-rating none">暂无评分</span>`;
             const posterUrl = item.image || item.mikan_poster || 'https://placehold.co/240x320/1a1b1e/6c757d?text=No+Poster';
+            // 优先显示 Mikan 最新更新日期，如 "2026/07/28" → "07/28 更新"
+            let dayText = label;
+            if (item.last_update) {
+                const m = String(item.last_update).match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+                dayText = m ? `${m[2]}/${m[3]} 更新` : item.last_update;
+            }
+            const jpName = item.name || '';
 
             let btnHtml = '';
             if (item.mikan_rss_url) {
@@ -947,10 +1075,10 @@
                     <img class="poster" src="${posterUrl}" alt="${escapeHtml(item.name_cn || item.name)}" loading="lazy" onerror="this.src='https://placehold.co/240x320/1a1b1e/6c757d?text=Error'">
                     <div class="card-body">
                         <div class="card-title" title="${escapeHtml(item.name_cn || item.name)}">${escapeHtml(item.name_cn || '未知')}</div>
-                        <div class="card-title-jp" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</div>
+                        <div class="card-title-jp" title="${escapeHtml(jpName)}">${escapeHtml(jpName)}</div>
                         <div class="card-meta">
                             ${ratingHtml}
-                            <span class="card-day">${label}</span>
+                            <span class="card-day">${dayText}</span>
                         </div>
                         <div class="card-actions">
                             ${btnHtml}

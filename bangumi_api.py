@@ -380,15 +380,20 @@ def search_mikan_rss(title_cn: str, title_jp: str, proxy: dict | None = None) ->
 
 def get_mikan_season_list(proxy: dict | None = None) -> list[dict]:
     """
-    爬取 Mikan 首页，获取当季所有番剧的列表。
+    爬取 Mikan 首页，获取当季番列表（按星期几/剧场版分组，与 Mikan 首页一致）。
     只需一次请求，避免逐个搜索。
 
-    返回: [{title, bangumi_id, rss_url}, ...]
+    返回: [{title, bangumi_id, rss_url, mikan_poster_url, weekday, last_update}, ...]
+    weekday: 1=周一 ... 7=周日, 0=剧场版/OVA
     """
     cache_key = 'mikan_homepage'
     cached = _get_cached(cache_key, MIKAN_CACHE_TTL)
     if cached is not None:
-        return cached
+        # 旧版本缓存缺少 weekday 字段，视为过期重新爬取
+        if cached and isinstance(cached[0], dict) and 'weekday' not in cached[0]:
+            cached = None
+        else:
+            return cached
 
     try:
         kwargs = {'impersonate': 'chrome110', 'timeout': 15}
@@ -398,25 +403,67 @@ def get_mikan_season_list(proxy: dict | None = None) -> list[dict]:
         resp.raise_for_status()
 
         soup = BeautifulSoup(resp.content, 'lxml')
-        items: list[dict] = []
 
-        for li in soup.select('li'):
+        # 1) 星期分组：m-home-week-item（星期一~星期日 + 剧场版）
+        weekday_map = {'星期一': 1, '星期二': 2, '星期三': 3, '星期四': 4,
+                       '星期五': 5, '星期六': 6, '星期日': 7,
+                       '剧场版': 0, 'OVA': 0, 'OVA/剧场版 (beta)': 0}
+        items: list[dict] = []
+        seen_ids: set[int] = set()
+
+        for item in soup.select('div.m-home-week-item'):
+            title_el = item.select_one('.title')
+            if not title_el:
+                continue
+            label = title_el.get_text(strip=True)
+            weekday = weekday_map.get(label)
+            if weekday is None:
+                continue
+            for sq in item.select('.m-week-square'):
+                a = sq.select_one('a[href*="/Home/Bangumi/"]')
+                if not a:
+                    continue
+                m = re.search(r'/Home/Bangumi/(\d+)', a['href'])
+                if not m:
+                    continue
+                bangumi_id = int(m.group(1))
+                if bangumi_id in seen_ids:
+                    continue
+                seen_ids.add(bangumi_id)
+                title = (a.get('title') or '').strip() or a.get_text(strip=True)
+                # 海报 URL：m-week-square 内懒加载 data-src（去掉尺寸参数）
+                poster_rel = ''
+                img = sq.select_one('img[data-src]')
+                if img:
+                    poster_rel = (img['data-src'] or '').split('?')[0].strip()
+                poster_url = f"https://mikanani.me{poster_rel}" if poster_rel and poster_rel.startswith('/') else ''
+                rss_url = f"https://mikanani.me/RSS/Bangumi?bangumiId={bangumi_id}"
+                items.append({
+                    'title': title,
+                    'bangumi_id': bangumi_id,
+                    'rss_url': rss_url,
+                    'mikan_poster_url': poster_url,
+                    'weekday': weekday,
+                    'last_update': '',
+                })
+
+        # 2) 从"最近更新"列表（ul.an-ul）合并 last_update，按 bangumi_id 关联
+        update_map: dict[int, str] = {}
+        for li in soup.select('ul.an-ul li'):
             span = li.find('span', attrs={'data-bangumiid': True})
-            link = li.find('a', href=re.compile(r'/Home/Bangumi/\d+'))
-            if span and link:
-                bangumi_id = span['data-bangumiid'].strip()
-                title = link.get_text(strip=True)
-                if title and bangumi_id:
-                    rss_url = f"https://mikanani.me/RSS/Bangumi?bangumiId={bangumi_id}"
-                    # 海报 URL：Mikan 首页使用的懒加载 data-src
-                    poster_rel = (span.get('data-src') or '').strip()
-                    poster_url = f"https://mikanani.me{poster_rel}" if poster_rel and poster_rel.startswith('/') else ''
-                    items.append({
-                        'title': title,
-                        'bangumi_id': int(bangumi_id),
-                        'rss_url': rss_url,
-                        'mikan_poster_url': poster_url,
-                    })
+            if not span:
+                continue
+            try:
+                bid = int(span['data-bangumiid'].strip())
+            except (ValueError, KeyError):
+                continue
+            date_el = li.select_one('.date-text')
+            if date_el:
+                update_map[bid] = date_el.get_text(strip=True).replace('更新', '').strip()
+        for it in items:
+            if it['bangumi_id'] in update_map:
+                it['last_update'] = update_map[it['bangumi_id']]
+
         # 同时预热单个搜索缓存
         for item in items:
             lower = item['title'].lower().strip()
