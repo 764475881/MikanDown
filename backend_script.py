@@ -284,7 +284,7 @@ def _do_process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notif
                     continue
 
                 # 1. 检查条目标题是否包含所有"必须包含"的关键词 (不区分大小写)
-                is_include_match = all(k.lower() in entry_title.lower() for k in include_keywords) if include_keywords else True
+                is_include_match = all(_keyword_in_title(k, entry_title) for k in include_keywords) if include_keywords else True
 
                 # 2. 检查条目标题是否包含任何"必须不含"的关键词 (不区分大小写)
                 is_exclude_match = any(k.lower() in entry_title.lower() for k in exclude_keywords) if exclude_keywords else False
@@ -446,6 +446,19 @@ def _title_is_group(title: str, subgroup: str) -> bool:
         ) is not None
     except re.error:
         return False
+
+
+def _keyword_in_title(keyword: str, title: str) -> bool:
+    """检查关键词是否出现在标题中；形如 [X] 的字幕组关键词同时兼容中文书名号【X】。大小写不敏感。"""
+    k = keyword.strip().lower()
+    t = title.lower()
+    if not k:
+        return False
+    # [字幕组] 关键词：Mikan 标题可能用 [字幕组] 或 【字幕组】
+    if k.startswith('[') and k.endswith(']'):
+        inner = k[1:-1]
+        return f'[{inner}]' in t or f'【{inner}】' in t
+    return k in t
 
 
 def get_rss_episodes(feed_url: str, proxy_config: dict | None = None, logger=None, subgroup: str = '') -> dict[int, dict]:

@@ -1395,7 +1395,7 @@
                                 <label>排除</label>
                                 <input type="text" placeholder="关键词，空格分隔，命中任一即跳过（如 720P）">
                             </div>
-                            <button class="sg-subscribe-btn" onclick="subscribeGroup(this, '${subjectId}', '${escapeHtml(rssUrl)}', '${escapeHtml(title)}', '${safeName}')">🔽 订阅该组并下载</button>
+                            <button class="sg-subscribe-btn" onclick="subscribeGroup(this, '${subjectId}', '${escapeHtml(g.subgroup_rss_url || rssUrl)}', '${escapeHtml(title)}', '${safeName}', '${escapeHtml(g.subgroup_rss_url || '')}')">🔽 订阅该组并下载</button>
                         </div>
                     </div>
                 </div>`;
@@ -1461,12 +1461,14 @@
         pendingSubscribe = null;
     }
 
-    function subscribeGroup(btn, subjectId, rssUrl, title, groupName) {
+    function subscribeGroup(btn, subjectId, rssUrl, title, groupName, subgroupRssUrl) {
         const groupEl = btn.closest('.sg-group');
         const inputs = groupEl ? groupEl.querySelectorAll('.sg-filters input') : [];
         const include = inputs.length > 0 ? inputs[0].value.trim() : '';
         const exclude = inputs.length > 1 ? inputs[1].value.trim() : '';
-        doSubscribe(subjectId, rssUrl, title, groupName, include, exclude);
+        // 优先使用该字幕组的专属 RSS（只含本组条目），否则回退番剧级 RSS
+        const finalRss = subgroupRssUrl || rssUrl;
+        doSubscribe(subjectId, finalRss, title, groupName, include, exclude);
         closeSubgroupModal();
     }
 

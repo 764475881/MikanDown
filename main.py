@@ -669,10 +669,54 @@ def api_season():
     return jsonify(result)
 
 
+def _fetch_subgroup_rss_map(bangumi_id, proxies_to_use):
+    """抓取 Mikan 番剧详情页，返回 {字幕组名: 该字幕组专属 RSS URL}。
+    每个字幕组的 RSS 只含本组条目（/RSS/Bangumi?bangumiId=X&subgroupid=Y）。
+    注意：详情页区块名（如 Kirara Fantasia）可能和 RSS 条目前缀（如 [黒ネズミたち]）不一致，
+    因此对每个 subgroup 抓取专属 RSS，以条目的实际前缀作为组名 key，保证与 preview_groups 分组一致。"""
+    result = {}
+    try:
+        page_url = f"https://mikanani.me/Home/Bangumi/{bangumi_id}"
+        resp = cffi_requests.get(page_url, impersonate="chrome110", proxies=proxies_to_use, timeout=30)
+        if resp.status_code != 200:
+            return result
+        soup = BeautifulSoup(resp.content, 'lxml')
+        # 详情页每个字幕组区块: <div class="subgroup-name subgroup-{id}">
+        subgroup_ids = []
+        for el in soup.select('.subgroup-name'):
+            cls = ' '.join(el.get('class', []))
+            m = re.search(r'subgroup-(\d+)', cls)
+            if m:
+                subgroup_ids.append(m.group(1))
+        # 对每个 subgroup 抓专属 RSS，取条目前缀作为组名
+        for sid in subgroup_ids:
+            sub_rss_url = (
+                f"https://mikanani.me/RSS/Bangumi?bangumiId={bangumi_id}&subgroupid={sid}"
+            )
+            try:
+                r2 = cffi_requests.get(sub_rss_url, impersonate="chrome110", proxies=proxies_to_use, timeout=20)
+                if r2.status_code != 200:
+                    continue
+                sub_feed = feedparser.parse(r2.content)
+                for entry in sub_feed.entries[:5]:
+                    t = entry.get('title', '')
+                    m2 = re.match(r'^[\[【]([^\]】]+)[\]】]', t)
+                    if m2:
+                        gname = m2.group(1).strip()
+                        if gname and gname not in result:
+                            result[gname] = sub_rss_url
+                        break
+            except Exception:
+                continue
+    except Exception as e:
+        logger.warning(f"获取字幕组 RSS 映射失败: {e}")
+    return result
+
+
 @app.route('/api/season/preview_groups', methods=['POST'])
 @login_required
 def season_preview_groups():
-    """解析 Bangumi RSS，按字幕组分组返回资源列表（名称 + 大小）"""
+    """解析 Bangumi RSS，按字幕组分组返回资源列表（名称 + 大小 + 各字幕组专属 RSS URL）"""
     data = request.json
     rss_url = data.get('rss_url')
     if not rss_url:
@@ -680,6 +724,16 @@ def season_preview_groups():
 
     config = load_config()
     proxies_to_use = config.get('proxy') if config.get('proxy', {}).get('http') else None
+
+    # 字幕组专属 RSS 映射：{组名: 专属 RSS URL}
+    subgroup_rss_map = {}
+    try:
+        qp = parse_qs(urlparse(rss_url).query)
+        bangumi_id = qp.get('bangumiId', [None])[0]
+        if bangumi_id:
+            subgroup_rss_map = _fetch_subgroup_rss_map(bangumi_id, proxies_to_use)
+    except Exception:
+        subgroup_rss_map = {}
 
     try:
         resp = cffi_requests.get(rss_url, impersonate="chrome110", proxies=proxies_to_use, timeout=30)
@@ -723,7 +777,13 @@ def season_preview_groups():
         # 按条目数降序排列
         sorted_groups = sorted(groups.items(), key=lambda x: -x[1]["count"])
         group_list = [
-            {"name": name, "count": g["count"], "items": g["items"]}
+            {
+                "name": name,
+                "count": g["count"],
+                "items": g["items"],
+                # 每个字幕组专属 RSS URL（只含该组条目，无需 include 字符串过滤）
+                "subgroup_rss_url": subgroup_rss_map.get(name, ''),
+            }
             for name, g in sorted_groups
         ]
 
@@ -771,7 +831,10 @@ def season_subscribe():
 
         # include 过滤器 = [字幕组名] + 用户自定义包含关键词（全部匹配才下载）
         include_parts = []
-        if subgroup:
+        # 字幕组专属 RSS（含 subgroupid）已只含本组条目，无需再加字幕组 include 关键词；
+        # 番剧级 RSS 才需要靠 [字幕组] 关键词过滤
+        is_subgroup_rss = 'subgroupid' in rss_url
+        if subgroup and not is_subgroup_rss:
             include_parts.append(f"[{subgroup}]")
         for kw in include.split():
             if kw not in include_parts:
