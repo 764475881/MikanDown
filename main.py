@@ -234,8 +234,10 @@ def delete_feed(feed_id):
             except Exception as e: logger.error(f"连接 qBittorrent 或删除时出错: {e}")
         save_config(config)
         # feeds 结构变化：使缺集检测缓存失效（index 已偏移）
-        global _missing_cache
+        global _missing_cache, _season_cache, _season_cache_time
         _missing_cache.clear()
+        _season_cache = None
+        _season_cache_time = 0
         return jsonify({"success": True, "config": config})
     return jsonify({"success": False, "message": "无效的Feed ID"}), 404
 @app.route('/update_proxy', methods=['POST'])
