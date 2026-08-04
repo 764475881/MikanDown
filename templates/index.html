@@ -155,6 +155,28 @@
         .manual-rss-input input:focus { border-color: #e64980; }
         .manual-rss-input button { background: linear-gradient(135deg, #e64980, #f06595); color: #fff; border: none; border-radius: 6px; padding: 0.35rem 0.6rem; font-size: 0.7rem; cursor: pointer; white-space: nowrap; }
 
+        /* ===== 字幕组选择弹窗 ===== */
+        .sg-group { border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; margin-bottom: 0.6rem; background: rgba(255,255,255,0.02); }
+        .sg-header { display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.75rem; cursor: pointer; }
+        .sg-header:hover { background: rgba(255,255,255,0.04); }
+        .sg-name { color: #e9ecef; font-size: 0.85rem; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .sg-count { color: #6c757d; font-size: 0.7rem; white-space: nowrap; }
+        .sg-arrow { color: #6c757d; font-size: 0.7rem; transition: transform 0.2s; }
+        .sg-group.open .sg-arrow { transform: rotate(180deg); }
+        .sg-items { display: none; border-top: 1px solid rgba(255,255,255,0.06); padding: 0.5rem 0.75rem; }
+        .sg-group.open .sg-items { display: block; }
+        .sg-item { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 0.3rem 0; font-size: 0.75rem; color: #adb5bd; border-bottom: 1px dashed rgba(255,255,255,0.05); }
+        .sg-item .sg-item-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .sg-item .sg-item-size { color: #868e96; font-size: 0.68rem; white-space: nowrap; }
+        .sg-filters { margin-top: 0.6rem; }
+        .sg-filters .sg-f-row { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem; }
+        .sg-filters label { color: #868e96; font-size: 0.7rem; white-space: nowrap; }
+        .sg-filters input { flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 0.3rem 0.5rem; color: #c1c2c5; font-size: 0.75rem; outline: none; margin-bottom: 0; }
+        .sg-filters input:focus { border-color: #e64980; }
+        .sg-filters .sg-subscribe-btn { width: 100%; margin-top: 0.4rem; padding: 0.45rem 0; background: linear-gradient(135deg, #e64980, #f06595); color: #fff; border: none; border-radius: 6px; font-size: 0.8rem; cursor: pointer; }
+        .sg-filters .sg-subscribe-btn:hover { opacity: 0.85; }
+        .sg-filters .sg-subscribe-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
         /* ===== Toast 提示 ===== */
         #toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 2000; display: flex; flex-direction: column; gap: 0.5rem; }
         .toast-msg { background: #2b2d30; border: 1px solid rgba(255,255,255,0.12); border-left: 3px solid #34d399; color: #e9ecef; padding: 0.6rem 1rem; border-radius: 8px; font-size: 0.8rem; box-shadow: 0 6px 18px rgba(0,0,0,0.35); animation: toast-in 0.25s ease-out; }
@@ -348,10 +370,10 @@
 
 <!-- ===== 字幕组选择弹窗 ===== -->
 <div id="subgroup-modal-overlay" class="modal-overlay">
-    <div class="modal-content" onclick="event.stopPropagation();" style="max-width:480px;">
+    <div class="modal-content" onclick="event.stopPropagation();" style="max-width:560px;">
         <h3 id="subgroup-modal-title">选择字幕组</h3>
-        <p style="font-size:0.8rem;color:#868e96;margin-bottom:1rem;">该番剧有多个字幕组，请选择要订阅的：</p>
-        <div id="subgroup-modal-body" style="text-align:left;max-height:50vh;overflow-y:auto;"></div>
+        <p style="font-size:0.8rem;color:#868e96;margin-bottom:1rem;">展开字幕组查看资源列表，可配置过滤规则后订阅：</p>
+        <div id="subgroup-modal-body" style="text-align:left;max-height:60vh;overflow-y:auto;"></div>
         <div class="modal-buttons">
             <button class="btn-modal-secondary" onclick="closeSubgroupModal()">取消</button>
         </div>
@@ -1111,7 +1133,7 @@
     async function subscribeSeason(subjectId, rssUrl, title, mikanPoster) {
         if (subscribing[subjectId]) return;
 
-        // Step 1: 获取字幕组列表
+        // Step 1: 获取字幕组列表（含资源名称 + 大小）
         const btn = document.querySelector(`.season-card[data-subject-id="${subjectId}"] .season-btn`);
         if (btn) { btn.textContent = '加载中...'; btn.disabled = true; }
 
@@ -1128,18 +1150,37 @@
                 return;
             }
 
-            // Step 2: 只有1个组 → 直接订阅
-            if (data.single_group) {
-                await doSubscribe(subjectId, rssUrl, title, data.single_group);
-                return;
-            }
-
-            // Step 3: 多个组 → 显示选择弹窗
+            // 无论单字幕组还是多字幕组，都显示选择弹窗（可查看资源 + 配置过滤规则）
             let bodyHtml = '';
             for (const g of data.groups) {
-                bodyHtml += `<div onclick="doSubscribeWithGroup('${g.name.replace(/'/g, "\'")}')" style="padding:0.6rem 0.75rem;border-bottom:1px solid rgba(255,255,255,0.06);cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-radius:6px;transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
-                    <span style="color:#c1c2c5;font-size:0.85rem;">${g.name}</span>
-                    <span style="color:#6c757d;font-size:0.7rem;">${g.count} 个资源</span>
+                const safeName = escapeHtml(g.name);
+                let itemsHtml = '';
+                for (const it of g.items) {
+                    itemsHtml += `<div class="sg-item">
+                        <span class="sg-item-title" title="${escapeHtml(it.title)}">${escapeHtml(it.title)}</span>
+                        <span class="sg-item-size">${formatSize(it.size)}</span>
+                    </div>`;
+                }
+                bodyHtml += `<div class="sg-group">
+                    <div class="sg-header" onclick="toggleGroupItems(this)">
+                        <span class="sg-name">${safeName}</span>
+                        <span class="sg-count">${g.count} 个资源</span>
+                        <span class="sg-arrow">▾</span>
+                    </div>
+                    <div class="sg-items">
+                        ${itemsHtml}
+                        <div class="sg-filters">
+                            <div class="sg-f-row">
+                                <label>包含</label>
+                                <input type="text" placeholder="关键词，空格分隔，全部满足才下载（如 1080P）">
+                            </div>
+                            <div class="sg-f-row">
+                                <label>排除</label>
+                                <input type="text" placeholder="关键词，空格分隔，命中任一即跳过（如 720P）">
+                            </div>
+                            <button class="sg-subscribe-btn" onclick="subscribeGroup(this, '${subjectId}', '${escapeHtml(rssUrl)}', '${escapeHtml(title)}', '${safeName}')">🔽 订阅该组并下载</button>
+                        </div>
+                    </div>
                 </div>`;
             }
             document.getElementById('subgroup-modal-title').textContent =
@@ -1152,6 +1193,20 @@
             if (btn) { btn.textContent = '追番并下载'; btn.disabled = false; }
             alert('网络错误: ' + e.message);
         }
+    }
+
+    function formatSize(bytes) {
+        if (!bytes || bytes <= 0) return '未知大小';
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        let i = 0;
+        let v = bytes;
+        while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+        return v.toFixed(i > 1 ? 2 : 0) + ' ' + units[i];
+    }
+
+    function toggleGroupItems(el) {
+        const group = el.closest('.sg-group');
+        if (group) group.classList.toggle('open');
     }
 
     let subscribing = {};
@@ -1189,15 +1244,16 @@
         pendingSubscribe = null;
     }
 
-    function doSubscribeWithGroup(groupName) {
-        if (!pendingSubscribe) return;
-        const btn = document.querySelector(`.season-card[data-subject-id="${pendingSubscribe.subjectId}"] .season-btn`);
-        if (btn) { btn.textContent = '处理中...'; btn.disabled = true; }
-        doSubscribe(pendingSubscribe.subjectId, pendingSubscribe.rssUrl, pendingSubscribe.title, groupName);
+    function subscribeGroup(btn, subjectId, rssUrl, title, groupName) {
+        const groupEl = btn.closest('.sg-group');
+        const inputs = groupEl ? groupEl.querySelectorAll('.sg-filters input') : [];
+        const include = inputs.length > 0 ? inputs[0].value.trim() : '';
+        const exclude = inputs.length > 1 ? inputs[1].value.trim() : '';
+        doSubscribe(subjectId, rssUrl, title, groupName, include, exclude);
         closeSubgroupModal();
     }
 
-    async function doSubscribe(subjectId, rssUrl, title, groupName) {
+    async function doSubscribe(subjectId, rssUrl, title, groupName, include, exclude) {
         if (subscribing[subjectId]) return;
         subscribing[subjectId] = true;
 
@@ -1213,7 +1269,9 @@
                     rss_url: rssUrl,
                     title: title,
                     subgroup: groupName || '',
-                    mikan_poster: mikanPoster || ''
+                    mikan_poster: mikanPoster || '',
+                    include: include || '',
+                    exclude: exclude || ''
                 })
             });
             const data = await resp.json();

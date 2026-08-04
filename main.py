@@ -662,7 +662,7 @@ def api_season():
 @app.route('/api/season/preview_groups', methods=['POST'])
 @login_required
 def season_preview_groups():
-    """解析 Bangumi RSS，返回所有字幕组列表"""
+    """解析 Bangumi RSS，按字幕组分组返回资源列表（名称 + 大小）"""
     data = request.json
     rss_url = data.get('rss_url')
     if not rss_url:
@@ -676,18 +676,47 @@ def season_preview_groups():
         resp.raise_for_status()
         feed = feedparser.parse(resp.content)
 
-        groups: dict[str, int] = {}
+        groups: dict[str, dict] = {}   # name -> {count, items}
+        uncategorized = []
         for entry in feed.entries:
-            match = re.match(r'^[\[【]([^\]】]+)[\]】]', entry.title)
+            title = entry.get('title', '')
+            # 资源大小：优先 enclosure.length，其次 contentlength
+            size = 0
+            if hasattr(entry, 'enclosures') and entry.enclosures:
+                for enc in entry.enclosures:
+                    if enc.get('type', '') == 'application/x-bittorrent' or enc.get('href', '').endswith('.torrent'):
+                        try:
+                            size = int(enc.get('length') or 0)
+                        except (TypeError, ValueError):
+                            size = 0
+                        break
+            if not size:
+                try:
+                    size = int(entry.get('contentlength') or 0)
+                except (TypeError, ValueError):
+                    size = 0
+            item = {"title": title, "size": size}
+
+            match = re.match(r'^[\[【]([^\]】]+)[\]】]', title)
             if match:
                 group = match.group(1).strip()
-                groups[group] = groups.get(group, 0) + 1
+                g = groups.setdefault(group, {"count": 0, "items": []})
+                g["count"] += 1
+                g["items"].append(item)
+            else:
+                uncategorized.append(item)
+
+        # 未匹配到字幕组前缀的条目归入"其他"
+        if uncategorized:
+            groups.setdefault("其他", {"count": len(uncategorized), "items": uncategorized})
 
         # 按条目数降序排列
-        sorted_groups = sorted(groups.items(), key=lambda x: -x[1])
-        group_list = [{"name": g, "count": c} for g, c in sorted_groups]
+        sorted_groups = sorted(groups.items(), key=lambda x: -x[1]["count"])
+        group_list = [
+            {"name": name, "count": g["count"], "items": g["items"]}
+            for name, g in sorted_groups
+        ]
 
-        # 检查只有1个组时自动跳过
         return jsonify({
             "success": True,
             "groups": group_list,
@@ -707,6 +736,8 @@ def season_subscribe():
     title = data.get('title', '未知番剧')
     subgroup = data.get('subgroup', '').strip()
     mikan_poster = data.get('mikan_poster', '').strip()
+    include = (data.get('include') or '').strip()   # 用户自定义包含关键词
+    exclude = (data.get('exclude') or '').strip()   # 用户自定义排除关键词
 
     if not rss_url:
         return jsonify({"success": False, "message": "缺少 RSS URL"}), 400
@@ -728,11 +759,21 @@ def season_subscribe():
             "subgroup": subgroup
         }
 
-        # 如果指定了字幕组，自动添加 include 过滤器
+        # include 过滤器 = [字幕组名] + 用户自定义包含关键词（全部匹配才下载）
+        include_parts = []
         if subgroup:
-            new_feed['filters']['include'] = f"[{subgroup}]"
-        else:
-            # 没指定则自动从 RSS 首个条目提取
+            include_parts.append(f"[{subgroup}]")
+        for kw in include.split():
+            if kw not in include_parts:
+                include_parts.append(kw)
+        if include_parts:
+            new_feed['filters']['include'] = ' '.join(include_parts)
+        # exclude 过滤器 = 用户自定义排除关键词（任一匹配即跳过）
+        if exclude:
+            new_feed['filters']['exclude'] = exclude
+
+        # 如果没指定字幕组，自动从 RSS 首个条目提取
+        if not subgroup:
             response_rss = cffi_requests.get(rss_url, impersonate="chrome110", proxies=proxies_to_use, timeout=30)
             response_rss.raise_for_status()
             feed = feedparser.parse(response_rss.content)
@@ -740,6 +781,8 @@ def season_subscribe():
                 match = re.search(r"^[\[【]([^\]】]+)[\]】]", feed.entries[0].title)
                 if match:
                     new_feed['subgroup'] = match.group(1).strip()
+                    if 'include' in new_feed['filters']:
+                        new_feed['filters']['include'] = f"[{match.group(1).strip()}] " + new_feed['filters']['include']
 
         # 如果没有 Mikan 海报（前端订阅或手动输入），再从 Mikan Bangumi 页面获取
         if not new_feed['cover_url']:
