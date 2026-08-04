@@ -215,6 +215,12 @@
         .missing-list .ep-dl-btn:hover { opacity: 0.85; transform: translateY(-1px); }
         .missing-list .ep-dl-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; transform: none; }
 
+        /* ===== 缺集弹窗 · 已下载区块 ===== */
+        .downloaded-section { margin: 0 0 0.6rem 0; padding: 0.55rem 0.65rem; border: 1px solid rgba(52, 211, 153, 0.3); border-radius: 12px; background: rgba(52, 211, 153, 0.08); }
+        .downloaded-section .dl-title { font-size: 0.72rem; font-weight: 700; color: #10b981; margin-bottom: 0.35rem; }
+        .downloaded-section .dl-badges { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+        .downloaded-section .dl-badge { font-size: 0.68rem; font-weight: 700; padding: 0.12rem 0.45rem; border-radius: 999px; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+
         /* ===== Bangumi 搜索 ===== */
         .bangumi-search-input { display: flex; gap: 0.5rem; margin: 0.75rem 0; }
         .bangumi-search-input input {
@@ -720,8 +726,9 @@
                 addFeedForm.reset();
                 // 显示后台处理中视图，轮询任务状态，保证流程完整（成功/失败都有明确反馈）
                 await waitForAddTask(currentRssUrlToAdd);
-                // 订阅完成：立即触发缺集检测（后端缓存已失效），无需刷新页面
+                // 订阅完成：立即触发缺集检测（后端缓存已失效），无需刷新页面；并轮询刷新已下载进度
                 checkMissingEpisodes();
+                startMissingPolling();
             } else {
                 alert(`添加失败: ${data.message}`);
             }
@@ -980,17 +987,48 @@
         checkMissingEpisodes();
     });
 
-    async function checkMissingEpisodes() {
+    // 订阅/下载后自动轮询刷新缺集状态：每 15s 强制重检一次，最多 8 次（约 2 分钟）
+    // 用途：刚订阅的番剧在 qBit 添加种子需要时间，轮询让"已下载"徽章随下载进度实时更新
+    let missingPollTimer = null;
+    let missingPollCount = 0;
+    const MISSING_POLL_INTERVAL = 15000;
+    const MISSING_POLL_MAX = 8;
+
+    function startMissingPolling() {
+        stopMissingPolling();
+        missingPollCount = 0;
+        missingPollTimer = setInterval(async () => {
+            missingPollCount++;
+            await checkMissingEpisodes(true);
+            if (missingPollCount >= MISSING_POLL_MAX) stopMissingPolling();
+        }, MISSING_POLL_INTERVAL);
+    }
+
+    function stopMissingPolling() {
+        if (missingPollTimer) { clearInterval(missingPollTimer); missingPollTimer = null; }
+    }
+
+    async function checkMissingEpisodes(force = false) {
         // 显示所有 loading badge
         document.querySelectorAll('.ep-badge.loading').forEach(b => b.style.display = 'inline-block');
         try {
-            const resp = await fetch('/api/feeds/missing');
+            const resp = await fetch('/api/feeds/missing' + (force ? '?refresh=1' : ''));
             const data = await resp.json();
             if (!data.success) return;
             missingData = {};
+            let hasEmptyResult = false;
             for (const r of (data.feeds || [])) {
                 missingData[r.feed_id] = r;
                 updateFeedBadge(r.feed_id, r);
+                // 全缺 = 刚订阅种子未就位 / 下载中，自动开启轮询以便种子就位后实时更新
+                if (r.matched && !(r.downloaded || []).length && (r.missing || []).length > 0) {
+                    hasEmptyResult = true;
+                }
+            }
+            if (hasEmptyResult) startMissingPolling();
+            // 如果缺集弹窗正开着，同步刷新其内容（让"已下载"随进度实时出现）
+            if (document.getElementById('missing-modal-overlay').style.display === 'flex' && currentMissingFeedId !== null) {
+                openMissingModal(currentMissingFeedId);
             }
         } catch (e) {
             console.error('缺集检测失败:', e);
@@ -1011,16 +1049,17 @@
         }
 
         const count = (result.missing || []).length;
+        const dlCount = (result.downloaded || []).length;
         if (count === 0) {
             badge.className = 'ep-badge complete';
-            badge.textContent = '✓ 已追全';
-            badge.title = '所有剧集已下载完成';
-            badge.onclick = null;
+            badge.textContent = dlCount > 0 ? `✓ 已下${dlCount}集` : '✓ 已追全';
+            badge.title = `已下载 ${dlCount}/${result.total_episodes} 集`;
+            badge.onclick = () => openMissingModal(feedId);
         } else {
             const rssAvail = result.missing.filter(m => m.in_rss).length;
             badge.className = 'ep-badge missing';
-            badge.textContent = `缺${count}集`;
-            badge.title = `缺${count}集 (RSS可下${rssAvail}集) - 点击查看详情`;
+            badge.textContent = `缺${count}集·已下${dlCount}`;
+            badge.title = `缺${count}集 (RSS可下${rssAvail}集)，已下${dlCount}集 - 点击查看详情`;
             badge.onclick = () => openMissingModal(feedId);
         }
     }
@@ -1033,16 +1072,29 @@
         const overlay = document.getElementById('missing-modal-overlay');
         document.getElementById('missing-modal-title').textContent =
             `缺集检测 — ${result.bangumi_name_cn || '未知'}`;
+        const downloadedCount = (result.downloaded || []).length;
+        const missingCount = (result.missing || []).length;
         document.getElementById('missing-modal-sub').textContent =
-            `共 ${result.total_episodes} 集 | 缺失 ${result.missing.length} 集`;
+            `共 ${result.total_episodes} 集 | 已下载 ${downloadedCount} 集 | 缺失 ${missingCount} 集`;
 
         const listEl = document.getElementById('missing-list');
         const missing = result.missing || [];
+        const downloaded = result.downloaded || [];
+
+        // 已下载集区块（绿色徽章）
+        let downloadedHtml = '';
+        if (downloaded.length > 0) {
+            downloadedHtml = `<div class="downloaded-section">
+                <div class="dl-title">✓ 已下载 ${downloaded.length} 集</div>
+                <div class="dl-badges">${downloaded.map(ep => `<span class="dl-badge">第${ep}集</span>`).join('')}</div>
+            </div>`;
+        }
+
         if (missing.length === 0) {
-            listEl.innerHTML = '<p style="text-align:center;color:#10b981;font-weight:600;padding:1rem;">🌸 所有剧集已下载完成</p>';
+            listEl.innerHTML = downloadedHtml + '<p style="text-align:center;color:#10b981;font-weight:600;padding:1rem;">🌸 所有剧集已下载完成</p>';
             document.getElementById('download-all-missing-btn').style.display = 'none';
         } else {
-            listEl.innerHTML = missing.map(m => {
+            const missingHtml = missing.map(m => {
                 const statusText = m.in_rss ? 'RSS可下载' : 'RSS已无源';
                 const statusClass = m.in_rss ? 'available' : 'unavailable';
                 const dlBtn = m.in_rss
@@ -1054,6 +1106,7 @@
                     ${dlBtn}
                 </div>`;
             }).join('');
+            listEl.innerHTML = downloadedHtml + missingHtml;
             const hasAvail = missing.some(m => m.in_rss);
             document.getElementById('download-all-missing-btn').style.display = hasAvail ? 'inline-block' : 'none';
         }
@@ -1075,8 +1128,9 @@
             });
             const data = await resp.json();
             if (data.success) {
-                // 重新检测
-                await checkMissingEpisodes();
+                // 重新检测并轮询刷新，让"已下载"徽章实时更新
+                await checkMissingEpisodes(true);
+                startMissingPolling();
                 // 如果还在弹窗，刷新弹窗
                 if (document.getElementById('missing-modal-overlay').style.display === 'flex') {
                     openMissingModal(feedId);
@@ -1122,8 +1176,9 @@
         downloadBtn.textContent = `完成 (成功${success}, 失败${fail})`;
         downloadBtn.disabled = false;
 
-        // 重新检测
-        await checkMissingEpisodes();
+        // 重新检测并轮询刷新，让"已下载"徽章实时更新
+        await checkMissingEpisodes(true);
+        startMissingPolling();
         if (document.getElementById('missing-modal-overlay').style.display === 'flex') {
             openMissingModal(currentMissingFeedId);
         }
@@ -1505,8 +1560,21 @@
                 renderFeeds(data.config.feeds);
                 loadStatus();
                 showToast('✅ 已订阅并开始下载');
-                // 立即触发缺集检测（后端缓存已失效），让新订阅的缺集徽章即时出现
+                // 当季番页同步标记"已追番"（不重新请求网络）
+                if (seasonData) {
+                    let changed = false;
+                    seasonData.forEach(item => {
+                        if (!item.__separator__ && String(item.subject_id) === String(subjectId) && !item.is_subscribed) {
+                            item.is_subscribed = true;
+                            changed = true;
+                        }
+                    });
+                    if (changed) renderSeason(seasonData);
+                }
+                // 立即触发缺集检测（后端缓存已失效），让新订阅的缺集徽章即时出现；
+                // 并轮询刷新，让"已下载"随 qBit 添加种子的进度实时更新
                 checkMissingEpisodes();
+                startMissingPolling();
             } else if (!data.success && data.message) {
                 showToast('⚠️ ' + data.message, true);
             }

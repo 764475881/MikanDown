@@ -311,8 +311,10 @@ def api_status():
             qbt_client = _build_qbit_client(qbit_config)
             qbt_client.auth_log_in()
             all_torrents = qbt_client.torrents_info()
-            active_torrents = len([t for t in all_torrents if t.state in ('downloading', 'queuedDL', 'stalledDL')])
-            downloaded_total = len([t for t in all_torrents if t.state == 'completed'])
+            # 下载中：downloading/queuedDL/stalledDL/metaDL/forcedDL（含元数据获取）
+            active_torrents = len([t for t in all_torrents if t.state in ('downloading', 'queuedDL', 'stalledDL', 'metaDL', 'forcedDL')])
+            # 已完成：completed + 各种做种状态（uploading/stalledUP/queuedUP/pausedUP/forcedUP）
+            downloaded_total = len([t for t in all_torrents if t.state in ('completed', 'uploading', 'stalledUP', 'queuedUP', 'pausedUP', 'forcedUP')])
     except Exception:
         active_torrents = -1
         downloaded_total = -1
@@ -430,7 +432,7 @@ def bangumi_set(feed_id):
 @app.route('/api/feeds/missing')
 @login_required
 def feeds_missing():
-    """检查所有 feed 的缺集情况（5分钟缓存）"""
+    """检查所有 feed 的缺集情况（5分钟缓存，?refresh=1 强制重新检测）"""
     global _missing_cache, _missing_cache_time
     config = load_config()
 
@@ -438,9 +440,11 @@ def feeds_missing():
     if not feeds:
         return jsonify({"success": True, "feeds": []})
 
+    force_refresh = request.args.get('refresh') == '1'
+
     # 检查是否已缓存且未过期（5分钟）
     now = time.time()
-    if _missing_cache and (now - _missing_cache_time) < 300:
+    if not force_refresh and _missing_cache and (now - _missing_cache_time) < 300:
         # 注意：必须转回 list 再返回，前端期望数组；直接返回 dict 会让前端 for...of 抛错
         return jsonify({"success": True, "feeds": list(_missing_cache.values()), "cached": True})
 
@@ -487,6 +491,7 @@ def feeds_missing():
                 "matched": True,
                 "total_episodes": result.get('total_episodes', 0),
                 "missing": result.get('missing', []),
+                "downloaded": result.get('downloaded', []),
                 "bangumi_subject_id": result.get('bangumi_subject_id'),
                 "bangumi_name_cn": result.get('bangumi_name_cn', ''),
             })
@@ -496,9 +501,14 @@ def feeds_missing():
     if updated_config:
         save_config(config)
 
-    # 写缓存
+    # 写缓存。注意：全缺结果（downloaded 为空且 missing 非空）不缓存——
+    # 刚订阅时 qBit 种子可能尚未添加完成，此时检测到的"全缺"是瞬时状态，
+    # 若写入 5 分钟缓存会让页面一直显示全缺；跳过缓存后下次请求自动重检。
     _missing_cache.clear()
-    _missing_cache.update({r['feed_id']: r for r in results})
+    for r in results:
+        if r.get('matched') and not r.get('downloaded') and r.get('missing'):
+            continue
+        _missing_cache[r['feed_id']] = r
     _missing_cache_time = now
 
     return jsonify({"success": True, "feeds": results, "cached": False})
@@ -625,7 +635,17 @@ def api_season():
 
     config = load_config()
     proxy = config.get('proxy') if config.get('proxy', {}).get('http') else None
-    subscribed_rss_urls = {feed['url'] for feed in config.get('feeds', [])}
+    subscribed_feeds = config.get('feeds', [])
+
+    def _same_bangumi_url(url_a: str, url_b: str) -> bool:
+        """判断两个 RSS URL 是否指向同一部番剧：
+        完全相等，或 bangumiId 相同（字幕组专属 RSS 带 &subgroupid=，与番剧级 RSS 是同一部番）。"""
+        if url_a == url_b:
+            return True
+        def _bangumi_id(u: str):
+            return parse_qs(urlparse(u).query).get('bangumiId', [None])[0]
+        a, b = _bangumi_id(url_a), _bangumi_id(url_b)
+        return bool(a and a == b)
 
     # 唯一数据源：Mikan 首页（当季新番，按星期几/剧场版分组，含海报 + 最新更新日期）
     mikan_items = get_mikan_season_list(proxy=proxy)
@@ -651,7 +671,7 @@ def api_season():
             'last_update': mikan.get('last_update', ''),   # 如 "2026/07/28"
             'mikan_rss_url': mikan['rss_url'],
             'has_resource': mikan.get('has_resource', True),
-            'is_subscribed': mikan['rss_url'] in subscribed_rss_urls,
+            'is_subscribed': any(_same_bangumi_url(mikan['rss_url'], f.get('url', '')) for f in subscribed_feeds),
         }
         by_weekday.setdefault(mikan.get('weekday', 0), []).append(entry)
 
