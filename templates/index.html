@@ -982,13 +982,14 @@
     let currentMissingFeedId = null;
     let currentBangumiFeedId = null;
 
-    // 页面加载后自动检测
+    // 页面加载后自动检测（强制刷新，避免命中旧缓存显示过期缺集状态）
     document.addEventListener('DOMContentLoaded', function() {
-        checkMissingEpisodes();
+        checkMissingEpisodes(true);
     });
 
-    // 订阅/下载后自动轮询刷新缺集状态：每 15s 强制重检一次，最多 8 次（约 2 分钟）
-    // 用途：刚订阅的番剧在 qBit 添加种子需要时间，轮询让"已下载"徽章随下载进度实时更新
+    // 订阅/下载后自动轮询刷新缺集状态：每 15s 强制重检一次。
+    // 只要有种子还在下载（downloading 非空）就持续轮询，全部下载完成后最多再轮询
+    // MISSING_POLL_MAX 次即停止，避免无限空转。
     let missingPollTimer = null;
     let missingPollCount = 0;
     const MISSING_POLL_INTERVAL = 15000;
@@ -1000,6 +1001,9 @@
         missingPollTimer = setInterval(async () => {
             missingPollCount++;
             await checkMissingEpisodes(true);
+            // 还有集在下载（downloading 非空）→ 重置计数，继续轮询直到下载完成
+            const stillDownloading = Object.values(missingData).some(r => r.downloading && r.downloading.length > 0);
+            if (stillDownloading) missingPollCount = 0;
             if (missingPollCount >= MISSING_POLL_MAX) stopMissingPolling();
         }, MISSING_POLL_INTERVAL);
     }
@@ -1017,15 +1021,18 @@
             if (!data.success) return;
             missingData = {};
             let hasEmptyResult = false;
+            let hasDownloading = false;
             for (const r of (data.feeds || [])) {
                 missingData[r.feed_id] = r;
                 updateFeedBadge(r.feed_id, r);
+                // 有集在下载 → 保持轮询，让"已下载"随下载完成实时更新
+                if ((r.downloading || []).length > 0) hasDownloading = true;
                 // 全缺 = 刚订阅种子未就位 / 下载中，自动开启轮询以便种子就位后实时更新
                 if (r.matched && !(r.downloaded || []).length && (r.missing || []).length > 0) {
                     hasEmptyResult = true;
                 }
             }
-            if (hasEmptyResult) startMissingPolling();
+            if (hasEmptyResult || hasDownloading) startMissingPolling();
             // 如果缺集弹窗正开着，同步刷新其内容（让"已下载"随进度实时出现）
             if (document.getElementById('missing-modal-overlay').style.display === 'flex' && currentMissingFeedId !== null) {
                 openMissingModal(currentMissingFeedId);
@@ -1050,6 +1057,7 @@
 
         const count = (result.missing || []).length;
         const dlCount = (result.downloaded || []).length;
+        const dlActive = (result.downloading || []).length;
         if (count === 0) {
             badge.className = 'ep-badge complete';
             badge.textContent = dlCount > 0 ? `✓ 已下${dlCount}集` : '✓ 已追全';
@@ -1058,8 +1066,8 @@
         } else {
             const rssAvail = result.missing.filter(m => m.in_rss).length;
             badge.className = 'ep-badge missing';
-            badge.textContent = `缺${count}集·已下${dlCount}`;
-            badge.title = `缺${count}集 (RSS可下${rssAvail}集)，已下${dlCount}集 - 点击查看详情`;
+            badge.textContent = `缺${count}集·已下${dlCount}` + (dlActive ? `·下中${dlActive}` : '');
+            badge.title = `缺${count}集 (RSS可下${rssAvail}集)，已下${dlCount}集${dlActive ? `，${dlActive}集下载中` : ''} - 点击查看详情`;
             badge.onclick = () => openMissingModal(feedId);
         }
     }
@@ -1074,8 +1082,10 @@
             `缺集检测 — ${result.bangumi_name_cn || '未知'}`;
         const downloadedCount = (result.downloaded || []).length;
         const missingCount = (result.missing || []).length;
+        const downloadingList = result.downloading || [];
         document.getElementById('missing-modal-sub').textContent =
-            `共 ${result.total_episodes} 集 | 已下载 ${downloadedCount} 集 | 缺失 ${missingCount} 集`;
+            `共 ${result.total_episodes} 集 | 已下载 ${downloadedCount} 集 | 缺失 ${missingCount} 集` +
+            (downloadingList.length ? ` | 下载中 ${downloadingList.length} 集` : '');
 
         const listEl = document.getElementById('missing-list');
         const missing = result.missing || [];
@@ -1089,9 +1099,17 @@
                 <div class="dl-badges">${downloaded.map(ep => `<span class="dl-badge">第${ep}集</span>`).join('')}</div>
             </div>`;
         }
+        // 下载中区块（蓝色徽章，区别于已下载）
+        let downloadingHtml = '';
+        if (downloadingList.length > 0) {
+            downloadingHtml = `<div class="downloaded-section" style="border-color:rgba(96,165,250,0.35);background:rgba(96,165,250,0.08);">
+                <div class="dl-title" style="color:#60a5fa;">⏳ 下载中 ${downloadingList.length} 集</div>
+                <div class="dl-badges">${downloadingList.map(ep => `<span class="dl-badge" style="border-color:rgba(96,165,250,0.35);color:#60a5fa;">第${ep}集</span>`).join('')}</div>
+            </div>`;
+        }
 
         if (missing.length === 0) {
-            listEl.innerHTML = downloadedHtml + '<p style="text-align:center;color:#10b981;font-weight:600;padding:1rem;">🌸 所有剧集已下载完成</p>';
+            listEl.innerHTML = downloadedHtml + downloadingHtml + '<p style="text-align:center;color:#10b981;font-weight:600;padding:1rem;">🌸 所有剧集已下载完成</p>';
             document.getElementById('download-all-missing-btn').style.display = 'none';
         } else {
             const missingHtml = missing.map(m => {
@@ -1106,7 +1124,7 @@
                     ${dlBtn}
                 </div>`;
             }).join('');
-            listEl.innerHTML = downloadedHtml + missingHtml;
+            listEl.innerHTML = downloadedHtml + downloadingHtml + missingHtml;
             const hasAvail = missing.some(m => m.in_rss);
             document.getElementById('download-all-missing-btn').style.display = hasAvail ? 'inline-block' : 'none';
         }

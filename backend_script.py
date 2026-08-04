@@ -314,8 +314,14 @@ def _do_process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notif
                         info_hash = extract_info_hash_from_magnet(magnet_url)
                         qbit_auth = (qbit_user, qbit_pass) if qbit_user and qbit_pass else None
                         qbit_url = f"http://{qbit_host}:{qbit_port}/api/v2/torrents/add"
+                        # qBittorrent v5.0+ 对写操作校验 Host 头白名单和 CSRF(Referer/Origin)，
+                        # 这里显式带上 Referer/Origin，避免从 Docker 访问时被 403 拒绝。
+                        qbit_origin = f"http://{qbit_host}:{qbit_port}"
                         try:
-                            body = cffi_requests.post(qbit_url, auth=qbit_auth, data={
+                            body = cffi_requests.post(qbit_url, auth=qbit_auth, headers={
+                                'Referer': qbit_origin,
+                                'Origin': qbit_origin,
+                            }, data={
                                 'urls': magnet_url,
                                 'category': qbit_category,
                                 'savepath': save_path.rstrip('/'),
@@ -402,18 +408,18 @@ def get_downloaded_episodes(feed_title: str) -> set[int]:
     return downloaded
 
 
-def get_qbit_episodes(feed_title: str, qbit_config: dict | None = None, subgroup: str = '') -> tuple[set[int], bool]:
+def get_qbit_episodes(feed_title: str, qbit_config: dict | None = None, subgroup: str = '') -> tuple[set[int], bool, set[int]]:
     """
     从 qBittorrent 实际种子中获取某番剧已下载/正在下载的集号。
-    返回 (集号集合, qBit 是否可用)：
-      - qBit 可用且分类下无种子 → (set(), True)，表示真的没有（全部可补回）
-      - qBit 不可用（未配置/连接失败）→ (set(), False)，调用方降级为只读 history
+    返回 (集号集合, qBit 是否可用, 下载中的集号集合)：
+      - qBit 可用且分类下无种子 → (set(), True, set())，表示真的没有（全部可补回）
+      - qBit 不可用（未配置/连接失败）→ (set(), False, set())，调用方降级为只读 history
 
     若传入 subgroup，只统计该字幕组的种子（种子名须带 [字幕组] 前缀），
     其他字幕组的集不计入"已有"，避免用异组的种子误判为该集已齐。
     """
     if not qbit_config or not qbit_config.get('host'):
-        return set(), False
+        return set(), False, set()
     try:
         qbt_client = Client(
             host=qbit_config.get('host'),
@@ -427,6 +433,7 @@ def get_qbit_episodes(feed_title: str, qbit_config: dict | None = None, subgroup
         cat_name, _ = clean_category_name(feed_title)
         torrents = qbt_client.torrents_info(category=cat_name)
         eps: set[int] = set()
+        downloading: set[int] = set()
         for t in torrents:
             ep = extract_episode_number(t.name)
             if ep is None:
@@ -434,9 +441,11 @@ def get_qbit_episodes(feed_title: str, qbit_config: dict | None = None, subgroup
             if subgroup and not _title_is_group(t.name, subgroup):
                 continue
             eps.add(ep)
-        return eps, True
+            if t.state in ('downloading', 'metaDL', 'queuedDL', 'stalledDL', 'forcedDL'):
+                downloading.add(ep)
+        return eps, True, downloading
     except Exception:
-        return set(), False
+        return set(), False, set()
 
 
 def _title_is_group(title: str, subgroup: str) -> bool:
@@ -557,6 +566,8 @@ def detect_missing_episodes(
         return {
             'total_episodes': 0,
             'missing': [],
+            'downloaded': [],
+            'downloading': [],
             'bangumi_subject_id': bangumi_id,
             'bangumi_name_cn': subject.get('name_cn', ''),
             'episode_info': {},
@@ -572,11 +583,12 @@ def detect_missing_episodes(
     # 无需再按字幕组名过滤（避免种子名 [Nekomoe kissaten] 与中文组名不匹配误判）；
     # 番剧级 RSS 才需要 subgroup 过滤。
     subgroup = '' if 'subgroupid' in feed_url else (feed_item.get('subgroup') or '').strip()
-    qbit_eps, qbit_available = get_qbit_episodes(feed_title, qbit_config, subgroup)
+    qbit_eps, qbit_available, qbit_downloading = get_qbit_episodes(feed_title, qbit_config, subgroup)
     if qbit_available:
         downloaded_eps = qbit_eps
     else:
         downloaded_eps = get_downloaded_episodes(cat_name)
+        qbit_downloading = set()
 
     # ── 4. 获取 RSS 当前可用集 ──
     feed_url = feed_item.get('url', '')
@@ -604,6 +616,8 @@ def detect_missing_episodes(
     return {
         'total_episodes': total_episodes,
         'missing': missing,
+        'downloaded': sorted(downloaded_eps),   # 已下载/已存在集号列表
+        'downloading': sorted(qbit_downloading),  # 正在下载（downloading/metaDL 等状态）的集号
         'bangumi_subject_id': bangumi_id,
         'bangumi_name_cn': subject.get('name_cn', ''),
         'episode_info': episode_info,

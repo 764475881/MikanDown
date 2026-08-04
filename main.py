@@ -492,6 +492,7 @@ def feeds_missing():
                 "total_episodes": result.get('total_episodes', 0),
                 "missing": result.get('missing', []),
                 "downloaded": result.get('downloaded', []),
+                "downloading": result.get('downloading', []),
                 "bangumi_subject_id": result.get('bangumi_subject_id'),
                 "bangumi_name_cn": result.get('bangumi_name_cn', ''),
             })
