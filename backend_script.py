@@ -212,7 +212,9 @@ def _do_process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notif
         # 从订阅对象中提取所需信息
         url = feed_item.get('url')
         feed_title = feed_item.get('title', '未知番剧')
-        subgroup = feed_item.get('subgroup', '')
+        # 字幕组专属 RSS（含 subgroupid）天然只含本组条目，无需字符串过滤；
+        # 番剧级 RSS 才需要靠 subgroup 匹配过滤。
+        subgroup = '' if 'subgroupid' in (url or '') else (feed_item.get('subgroup', '') or '')
         filters = feed_item.get('filters', {})
         # 将关键词字符串按空格分割成列表，并过滤掉空字符串
         include_keywords = [k for k in filters.get('include', '').split() if k]
@@ -565,7 +567,11 @@ def detect_missing_episodes(
     # qBit 不可用（未配置/连接失败）时降级为只读 history，避免误报。
     # 指定字幕组时只统计该组的种子，异组种子不算"已有"。
     cat_name, _ = clean_category_name(feed_title)
-    subgroup = (feed_item.get('subgroup') or '').strip()
+    feed_url = feed_item.get('url', '')
+    # 字幕组专属 RSS（含 subgroupid）天然只含本组条目，qBit 分类下也只有本组种子，
+    # 无需再按字幕组名过滤（避免种子名 [Nekomoe kissaten] 与中文组名不匹配误判）；
+    # 番剧级 RSS 才需要 subgroup 过滤。
+    subgroup = '' if 'subgroupid' in feed_url else (feed_item.get('subgroup') or '').strip()
     qbit_eps, qbit_available = get_qbit_episodes(feed_title, qbit_config, subgroup)
     if qbit_available:
         downloaded_eps = qbit_eps
