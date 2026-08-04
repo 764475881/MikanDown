@@ -278,6 +278,11 @@ def _do_process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notif
                     continue # 如果还是没有链接，则跳过此条目
 
                 # --- 核心过滤逻辑 ---
+                # 0. 字幕组过滤：仅处理订阅的字幕组（未选字幕组则全部接受）
+                if subgroup and not _title_is_group(entry_title, subgroup):
+                    logger.info(f"  -> ℹ️ 跳过非订阅字幕组 '{subgroup}': {entry_title[:50]}")
+                    continue
+
                 # 1. 检查条目标题是否包含所有"必须包含"的关键词 (不区分大小写)
                 is_include_match = all(k.lower() in entry_title.lower() for k in include_keywords) if include_keywords else True
 
@@ -395,12 +400,15 @@ def get_downloaded_episodes(feed_title: str) -> set[int]:
     return downloaded
 
 
-def get_qbit_episodes(feed_title: str, qbit_config: dict | None = None) -> tuple[set[int], bool]:
+def get_qbit_episodes(feed_title: str, qbit_config: dict | None = None, subgroup: str = '') -> tuple[set[int], bool]:
     """
     从 qBittorrent 实际种子中获取某番剧已下载/正在下载的集号。
     返回 (集号集合, qBit 是否可用)：
       - qBit 可用且分类下无种子 → (set(), True)，表示真的没有（全部可补回）
       - qBit 不可用（未配置/连接失败）→ (set(), False)，调用方降级为只读 history
+
+    若传入 subgroup，只统计该字幕组的种子（种子名须带 [字幕组] 前缀），
+    其他字幕组的集不计入"已有"，避免用异组的种子误判为该集已齐。
     """
     if not qbit_config or not qbit_config.get('host'):
         return set(), False
@@ -419,17 +427,33 @@ def get_qbit_episodes(feed_title: str, qbit_config: dict | None = None) -> tuple
         eps: set[int] = set()
         for t in torrents:
             ep = extract_episode_number(t.name)
-            if ep:
-                eps.add(ep)
+            if ep is None:
+                continue
+            if subgroup and not _title_is_group(t.name, subgroup):
+                continue
+            eps.add(ep)
         return eps, True
     except Exception:
         return set(), False
 
 
-def get_rss_episodes(feed_url: str, proxy_config: dict | None = None, logger=None) -> dict[int, dict]:
+def _title_is_group(title: str, subgroup: str) -> bool:
+    """判断条目/种子标题是否属于指定字幕组（标题形如 [字幕组] 番剧名 ...）。大小写不敏感。"""
+    try:
+        return re.search(
+            rf'^[\[【]\s*{re.escape(subgroup)}\s*[\]】]',
+            title, re.IGNORECASE,
+        ) is not None
+    except re.error:
+        return False
+
+
+def get_rss_episodes(feed_url: str, proxy_config: dict | None = None, logger=None, subgroup: str = '') -> dict[int, dict]:
     """
     获取当前 RSS feed 中所有条目及其集号。
     返回 {ep_number: {url, title, torrent_url}, ...}
+    若指定 subgroup，仅收集与该字幕组匹配的条目；
+    否则（未选字幕组）收集全部条目，补缺时可能混入其他字幕组的资源。
     """
     result: dict[int, dict] = {}
     proxies = proxy_config if proxy_config and proxy_config.get('http') else None
@@ -440,6 +464,8 @@ def get_rss_episodes(feed_url: str, proxy_config: dict | None = None, logger=Non
         feed = feedparser.parse(resp.content)
         for entry in feed.entries:
             title = entry.get('title', '')
+            if subgroup and not _title_is_group(title, subgroup):
+                continue
             ep = extract_episode_number(title)
             if ep is None:
                 continue
@@ -524,8 +550,10 @@ def detect_missing_episodes(
     # ── 3. 获取已下载集号 ──
     # 以 qBit 实际种子为准（qBit 里没有的集 = 缺，可补回）；
     # qBit 不可用（未配置/连接失败）时降级为只读 history，避免误报。
+    # 指定字幕组时只统计该组的种子，异组种子不算"已有"。
     cat_name, _ = clean_category_name(feed_title)
-    qbit_eps, qbit_available = get_qbit_episodes(feed_title, qbit_config)
+    subgroup = (feed_item.get('subgroup') or '').strip()
+    qbit_eps, qbit_available = get_qbit_episodes(feed_title, qbit_config, subgroup)
     if qbit_available:
         downloaded_eps = qbit_eps
     else:
@@ -533,7 +561,7 @@ def detect_missing_episodes(
 
     # ── 4. 获取 RSS 当前可用集 ──
     feed_url = feed_item.get('url', '')
-    rss_eps = get_rss_episodes(feed_url, proxy_config, logger)
+    rss_eps = get_rss_episodes(feed_url, proxy_config, logger, subgroup)
     rss_ep_numbers: set[int] = set(rss_eps.keys())
 
     # ── 5. 计算缺集 ──

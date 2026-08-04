@@ -439,7 +439,8 @@ def feeds_missing():
     # 检查是否已缓存且未过期（5分钟）
     now = time.time()
     if _missing_cache and (now - _missing_cache_time) < 300:
-        return jsonify({"success": True, "feeds": _missing_cache, "cached": True})
+        # 注意：必须转回 list 再返回，前端期望数组；直接返回 dict 会让前端 for...of 抛错
+        return jsonify({"success": True, "feeds": list(_missing_cache.values()), "cached": True})
 
     proxy = config.get('proxy', {})
     qbit = config.get('qbit', {})

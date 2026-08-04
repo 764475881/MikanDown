@@ -265,6 +265,12 @@ def extract_episode_number(title: str) -> int | None:
     if m:
         return int(m.group(1))
 
+    # 模式4: 独立方括号集号 [01]（如喵萌奶茶屋: ...Shinai][01][1080p][繁日双语]）
+    # 排除分辨率/年份等大数字
+    m = re.search(r'\[(\d{1,3})\](?=\s*\[)', title)
+    if m and int(m.group(1)) <= 500:
+        return int(m.group(1))
+
     return None
 
 
