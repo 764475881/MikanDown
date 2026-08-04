@@ -436,6 +436,7 @@ def feeds_missing():
         return jsonify({"success": True, "feeds": _missing_cache, "cached": True})
 
     proxy = config.get('proxy', {})
+    qbit = config.get('qbit', {})
     results = []
     updated_config = False
 
@@ -444,7 +445,7 @@ def feeds_missing():
     # 并行检测所有 feed 的缺集情况（网络请求是主要耗时，串行会放大延迟）
     def _detect_one(feed):
         try:
-            return detect_missing_episodes(feed, proxy, logger)
+            return detect_missing_episodes(feed, proxy, logger, qbit)
         except Exception as e:
             logger.error(f"缺集检测异常 '{feed.get('title','')}': {e}")
             return None
@@ -506,7 +507,7 @@ def feed_missing(feed_id):
 
     feed = config['feeds'][feed_id]
     proxy = config.get('proxy', {})
-    result = detect_missing_episodes(feed, proxy, logger)
+    result = detect_missing_episodes(feed, proxy, logger, config.get('qbit', {}))
 
     if result is None and not feed.get('bangumi_subject_id'):
         return jsonify({

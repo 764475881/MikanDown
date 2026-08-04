@@ -134,6 +134,22 @@ def get_magnet_from_torrent_url(torrent_url: str, logger) -> str | None:
         return None
 
 
+def extract_info_hash_from_magnet(magnet_url: str) -> str | None:
+    """
+    从 magnet link 提取 btih info-hash，用于反向确认 qBittorrent 是否已接收该种子。
+    返回 40 位十六进制（小写）；base32 变体返回 32 位大写。无法提取返回 None。
+    """
+    if not magnet_url:
+        return None
+    m = re.search(r'xt=urn:btih:([a-fA-F0-9]{40})', magnet_url)
+    if m:
+        return m.group(1).lower()
+    m = re.search(r'xt=urn:btih:([a-z2-7]{32})', magnet_url)
+    if m:
+        return m.group(1).upper()
+    return None
+
+
 # --- 4. 核心处理函数 ---
 def process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notify_config=None):
     """
@@ -284,21 +300,39 @@ def _do_process_all_feeds(feed_objects, proxy_config, qbit_config, logger, notif
                             logger.error(f"  -> ❌ 无法获取 magnet link，跳过此条目")
                             continue
 
-                        # qB 的 torrents_add 会返回 202 但 added_torrent_ids 可能为空，
-                        # 所以用 requests 直接调用 API 检查响应体
+                        # qB 的 torrents_add 可能返回空 added_torrent_ids
+                        # （种子已存在 / 响应丢失 / 请求异常），
+                        # 统一用 info-hash 反向确认 qBit 实际状态，
+                        # 避免 history 与 qBit 不一致导致丢集无法补回。
+                        info_hash = extract_info_hash_from_magnet(magnet_url)
                         qbit_auth = (qbit_user, qbit_pass) if qbit_user and qbit_pass else None
                         qbit_url = f"http://{qbit_host}:{qbit_port}/api/v2/torrents/add"
-                        resp = cffi_requests.post(qbit_url, auth=qbit_auth, data={
-                            'urls': magnet_url,
-                            'category': qbit_category,
-                            'savepath': save_path.rstrip('/'),
-                        })
-                        body = resp.json()
-                        
-                        if body.get('added_torrent_ids'):
+                        try:
+                            body = cffi_requests.post(qbit_url, auth=qbit_auth, data={
+                                'urls': magnet_url,
+                                'category': qbit_category,
+                                'savepath': save_path.rstrip('/'),
+                            }).json()
+                            added_ids = body.get('added_torrent_ids') or []
+                        except Exception as e:
+                            logger.warning(f"  -> ⚠️ 添加请求响应异常: {e}，将反向确认 qBit 实际状态")
+                            body = {}
+                            added_ids = []
+
+                        confirmed = bool(added_ids)
+                        if not confirmed and info_hash:
+                            try:
+                                existing = qbt_client.torrents_info(hashes=info_hash)
+                                confirmed = bool(existing)
+                                if confirmed:
+                                    logger.info(f"  -> ✅ 反向确认：qBit 已存在该种子 (hash={info_hash[:10]}...)，补记历史")
+                            except Exception as e:
+                                logger.warning(f"  -> ⚠️ 反向确认 qBit 失败: {e}")
+
+                        if confirmed:
                             logger.info(f"  -> ✅ 成功添加到 qBittorrent，分类为 '{qbit_category}'。路径为 '{save_path}'")
                         else:
-                            logger.error(f"  -> ❌ qB 拒绝了该种子 (pending={body.get('pending_count')}, added={len(body.get('added_torrent_ids',[]))})")
+                            logger.error(f"  -> ❌ qB 未接受该种子 (added={len(added_ids)}, pending={body.get('pending_count', '?')})")
                             continue
 
                         # 创建新的历史记录对象，包含 URL、分类名，以及从标题解析的集号
@@ -361,6 +395,37 @@ def get_downloaded_episodes(feed_title: str) -> set[int]:
     return downloaded
 
 
+def get_qbit_episodes(feed_title: str, qbit_config: dict | None = None) -> tuple[set[int], bool]:
+    """
+    从 qBittorrent 实际种子中获取某番剧已下载/正在下载的集号。
+    返回 (集号集合, qBit 是否可用)：
+      - qBit 可用且分类下无种子 → (set(), True)，表示真的没有（全部可补回）
+      - qBit 不可用（未配置/连接失败）→ (set(), False)，调用方降级为只读 history
+    """
+    if not qbit_config or not qbit_config.get('host'):
+        return set(), False
+    try:
+        qbt_client = Client(
+            host=qbit_config.get('host'),
+            port=int(qbit_config.get('port')) if qbit_config.get('port') else 9888,
+            username=qbit_config.get('username'),
+            password=qbit_config.get('password'),
+            VERIFY_WEBUI_CERTIFICATE=False,
+            REQUESTS_ARGS={'timeout': (5, 15)},
+        )
+        qbt_client.auth_log_in()
+        cat_name, _ = clean_category_name(feed_title)
+        torrents = qbt_client.torrents_info(category=cat_name)
+        eps: set[int] = set()
+        for t in torrents:
+            ep = extract_episode_number(t.name)
+            if ep:
+                eps.add(ep)
+        return eps, True
+    except Exception:
+        return set(), False
+
+
 def get_rss_episodes(feed_url: str, proxy_config: dict | None = None, logger=None) -> dict[int, dict]:
     """
     获取当前 RSS feed 中所有条目及其集号。
@@ -403,6 +468,7 @@ def detect_missing_episodes(
     feed_item: dict,
     proxy_config: dict | None = None,
     logger=None,
+    qbit_config: dict | None = None,
 ) -> dict | None:
     """
     检测单个 feed 的缺集情况。
@@ -455,10 +521,15 @@ def detect_missing_episodes(
             'episode_info': {},
         }
 
-    # ── 3. 获取已下载集号（从分类名匹配） ──
-    # 先通过 clean_category_name 标准化，再匹配
+    # ── 3. 获取已下载集号 ──
+    # 以 qBit 实际种子为准（qBit 里没有的集 = 缺，可补回）；
+    # qBit 不可用（未配置/连接失败）时降级为只读 history，避免误报。
     cat_name, _ = clean_category_name(feed_title)
-    downloaded_eps = get_downloaded_episodes(cat_name)
+    qbit_eps, qbit_available = get_qbit_episodes(feed_title, qbit_config)
+    if qbit_available:
+        downloaded_eps = qbit_eps
+    else:
+        downloaded_eps = get_downloaded_episodes(cat_name)
 
     # ── 4. 获取 RSS 当前可用集 ──
     feed_url = feed_item.get('url', '')
