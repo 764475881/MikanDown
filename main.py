@@ -149,6 +149,9 @@ def add_feed():
     }
     config['feeds'].append(new_feed_object)
     save_config(config)
+    # feeds 结构变化：使缺集检测缓存失效，避免新 feed 因旧缓存(按旧 index)拿不到结果
+    global _missing_cache
+    _missing_cache.clear()
 
     with _add_tasks_lock:
         _add_tasks[rss_url] = {'status': 'processing', 'message': '正在解析字幕组、获取海报...', 'meta': {}}
@@ -230,6 +233,9 @@ def delete_feed(feed_id):
                 if len(history_list) != len(updated_history): save_history(updated_history)
             except Exception as e: logger.error(f"连接 qBittorrent 或删除时出错: {e}")
         save_config(config)
+        # feeds 结构变化：使缺集检测缓存失效（index 已偏移）
+        global _missing_cache
+        _missing_cache.clear()
         return jsonify({"success": True, "config": config})
     return jsonify({"success": False, "message": "无效的Feed ID"}), 404
 @app.route('/update_proxy', methods=['POST'])
@@ -802,6 +808,9 @@ def season_subscribe():
 
         config['feeds'].append(new_feed)
         save_config(config)
+        # feeds 结构变化：使缺集检测缓存失效
+        global _missing_cache
+        _missing_cache.clear()
 
         # 立即触发下载：在新线程中运行 process_all_feeds（只处理这个 feed）
         def _download_new_feed():

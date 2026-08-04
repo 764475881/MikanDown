@@ -630,9 +630,14 @@
         }
         const gridHtml = feeds.map((feed, index) => {
             const subgroup = feed.subgroup || '未知';
+            // cover_url 可能是完整 URL 或相对路径，统一拼成可访问的完整 URL
+            let coverSrc = feed.cover_url || '/images/Bangumi/default.jpg';
+            if (coverSrc && !/^https?:\/\//i.test(coverSrc)) {
+                coverSrc = 'https://mikanani.me' + coverSrc;
+            }
             return `
             <div class="feed-card">
-                <img src="https://mikanani.me${feed.cover_url || '/images/Bangumi/default.jpg'}" alt="${feed.title} Cover"
+                <img src="${coverSrc}" alt="${feed.title} Cover"
                      onerror="this.onerror=null;this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22600%22%3E%3Crect fill=%22%23232529%22 width=%22400%22 height=%22600%22/%3E%3Ctext fill=%22%23868e96%22 font-size=%2220%22 x=%22150%22 y=%22300%22%3ENo Image%3C/text%3E%3C/svg%3E';">
                 <div class="card-body">
                     <h6 title="${feed.title}">${feed.title}</h6>
@@ -715,6 +720,8 @@
                 addFeedForm.reset();
                 // 显示后台处理中视图，轮询任务状态，保证流程完整（成功/失败都有明确反馈）
                 await waitForAddTask(currentRssUrlToAdd);
+                // 订阅完成：立即触发缺集检测（后端缓存已失效），无需刷新页面
+                checkMissingEpisodes();
             } else {
                 alert(`添加失败: ${data.message}`);
             }
@@ -861,6 +868,9 @@
                 loadStatus();
                 closeModal();
                 showToast(deleteFiles ? '✅ 已全部删除（含 qBittorrent 文件）' : '✅ 已移除订阅');
+                // index 已偏移，清空旧结果并全量重检
+                missingData = {};
+                checkMissingEpisodes();
             } else {
                 alert(`删除失败: ${data.message}`);
                 showStep2(currentFeedTitle);
@@ -1493,6 +1503,8 @@
                 renderFeeds(data.config.feeds);
                 loadStatus();
                 showToast('✅ 已订阅并开始下载');
+                // 立即触发缺集检测（后端缓存已失效），让新订阅的缺集徽章即时出现
+                checkMissingEpisodes();
             } else if (!data.success && data.message) {
                 showToast('⚠️ ' + data.message, true);
             }
