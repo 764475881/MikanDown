@@ -57,7 +57,7 @@ def check_for_setup():
     has_feeds = len(config.get('feeds', [])) > 0
     # 如果 auth 和 qbit 都设置了，向导即可视为完成；订阅可稍后添加
     wizard_complete = password_is_set and qbit_is_set
-    if not wizard_complete and request.endpoint not in ['wizard', 'setup', 'static', 'login', 'api_test_qbit', 'preview_feed', 'api_status', 'update_qbit_settings', 'add_feed', 'update_global_filters', 'update_proxy', 'delete_feed', 'bangumi_search', 'bangumi_set', 'feeds_missing', 'feed_missing', 'add_single_torrent', 'api_season', 'season_subscribe', 'season_preview_groups', 'api_add_status']:
+    if not wizard_complete and request.endpoint not in ['wizard', 'setup', 'static', 'login', 'login_posters', 'api_test_qbit', 'preview_feed', 'api_status', 'update_qbit_settings', 'add_feed', 'update_global_filters', 'update_proxy', 'delete_feed', 'bangumi_search', 'bangumi_set', 'feeds_missing', 'feed_missing', 'add_single_torrent', 'api_season', 'season_subscribe', 'season_preview_groups', 'api_add_status']:
         return redirect(url_for('wizard'))
     if wizard_complete and request.endpoint == 'wizard':
         return redirect(url_for('index'))
@@ -89,6 +89,7 @@ def setup():
         save_config(config)
         flash('管理员账户创建成功！')
         session['logged_in'] = True
+        session['username'] = username
         return redirect(url_for('wizard'))
     return render_template('setup.html')
 
@@ -98,6 +99,9 @@ def wizard():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    # 已登录用户不允许再访问登录页，直接回主页
+    if session.get('logged_in'):
+        return redirect(url_for('index'))
     if request.method == 'POST':
         config = load_config()
         auth_config = config.get('auth')
@@ -108,10 +112,24 @@ def login():
         password_hash_to_check = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
         if username == auth_config['username'] and password_hash_to_check == correct_hash:
             session['logged_in'] = True
+            session['username'] = auth_config['username']
             return redirect(url_for('index'))
         else:
             flash('用户名或密码错误')
     return render_template('login.html')
+
+@app.route('/api/login_posters')
+def login_posters():
+    """登录页海报墙数据：返回当季番海报 URL 列表（无需登录）。"""
+    try:
+        config = load_config()
+        proxy = config.get('proxy') if config.get('proxy', {}).get('http') else None
+        items = get_mikan_season_list(proxy=proxy)
+        posters = [i.get('mikan_poster_url', '') for i in items if i.get('mikan_poster_url')]
+        return jsonify(posters[:48])
+    except Exception as e:
+        logger.warning(f"login_posters 获取失败: {e}")
+        return jsonify([])
 
 @app.route('/logout')
 @login_required
@@ -123,7 +141,8 @@ def logout():
 @login_required
 def index():
     config = load_config()
-    return render_template('index.html', config=config)
+    username = session.get('username') or (config.get('auth') or {}).get('username', '')
+    return render_template('index.html', config=config, username=username)
 
 @app.route('/api/preview_feed', methods=['POST'])
 @login_required

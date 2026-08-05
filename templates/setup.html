@@ -12,147 +12,98 @@
   <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/js/tabler.min.js" defer></script>
   <style>
     :root {
-      --bg: #fdf2f8;
+      --bg: #f0f6ff;
       --card: #ffffff;
-      --text: #4c3a55;
-      --text-2: #9b8ba8;
-      --primary: #f472b6;
-      --primary-deep: #ec4899;
-      --accent: #a78bfa;
-      --grad-deep: linear-gradient(135deg, #f472b6 0%, #8b5cf6 100%);
+      --text: #1e3a5f;
+      --text-2: #64748b;
+      --primary: #3b82f6;
+      --primary-deep: #2563eb;
+      --accent: #60a5fa;
+      --grad-deep: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
     }
 
     * { font-family: "M PLUS Rounded 1c", "Varela Round", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Segoe UI", sans-serif; }
 
+    /* ===== 蓝白渐变背景 + 漂浮圆点 ===== */
     body {
       margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh;
       background:
-        radial-gradient(circle at 12% 18%, rgba(249, 168, 212, 0.22) 0%, transparent 42%),
-        radial-gradient(circle at 88% 12%, rgba(196, 181, 253, 0.26) 0%, transparent 40%),
-        radial-gradient(circle at 72% 88%, rgba(254, 215, 170, 0.20) 0%, transparent 42%),
-        linear-gradient(160deg, #fdf2f8 0%, #f5f3ff 55%, #fdf2f8 100%);
+        radial-gradient(circle at 12% 18%, rgba(147, 197, 253, 0.22) 0%, transparent 42%),
+        radial-gradient(circle at 88% 12%, rgba(96, 165, 250, 0.26) 0%, transparent 40%),
+        radial-gradient(circle at 72% 88%, rgba(191, 219, 254, 0.20) 0%, transparent 42%),
+        linear-gradient(160deg, #f0f6ff 0%, #e8f1ff 55%, #f0f6ff 100%);
       background-attachment: fixed;
       color: var(--text);
     }
     body::before {
       content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
       background-image:
-        radial-gradient(circle 2px at 8% 22%, rgba(244,114,182,.35) 100%, transparent),
-        radial-gradient(circle 2px at 22% 74%, rgba(167,139,250,.40) 100%, transparent),
-        radial-gradient(circle 1.6px at 38% 12%, rgba(244,114,182,.30) 100%, transparent),
-        radial-gradient(circle 2.2px at 55% 64%, rgba(251,191,36,.35) 100%, transparent),
-        radial-gradient(circle 1.6px at 68% 30%, rgba(52,211,153,.35) 100%, transparent),
-        radial-gradient(circle 2px at 84% 52%, rgba(167,139,250,.35) 100%, transparent),
-        radial-gradient(circle 1.6px at 92% 84%, rgba(244,114,182,.30) 100%, transparent);
+        radial-gradient(circle 2px at 8% 22%, rgba(59,130,246,.30) 100%, transparent),
+        radial-gradient(circle 2px at 22% 74%, rgba(96,165,250,.35) 100%, transparent),
+        radial-gradient(circle 1.6px at 38% 12%, rgba(59,130,246,.25) 100%, transparent),
+        radial-gradient(circle 2.2px at 55% 64%, rgba(96,165,250,.30) 100%, transparent),
+        radial-gradient(circle 1.6px at 68% 30%, rgba(147,197,253,.35) 100%, transparent),
+        radial-gradient(circle 2px at 84% 52%, rgba(96,165,250,.30) 100%, transparent),
+        radial-gradient(circle 1.6px at 92% 84%, rgba(59,130,246,.25) 100%, transparent);
     }
 
-    /* ===== 马卡龙海报墙（粉紫浅色） ===== */
-    .poster-wall { position: fixed; inset: 0; overflow: hidden; z-index: -1; opacity: 0.5; }
-    .poster-wall-inner { width: 160%; height: 160%; position: absolute; top: -30%; left: -30%; transform: rotate(-8deg) scale(1.4); filter: blur(10px); }
+    /* ===== 海报墙（当季番海报，JS 动态填充） ===== */
+    .poster-wall { position: fixed; inset: 0; overflow: hidden; z-index: -1; opacity: 0.42; }
+    .poster-wall-inner { width: 160%; height: 160%; position: absolute; top: -30%; left: -30%; transform: rotate(-8deg) scale(1.4); filter: blur(6px); }
     .poster-wall-scroll { width: 100%; animation: scrollBg 40s linear infinite; }
     .pw-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
-    .poster-tile { aspect-ratio: 2 / 3; border-radius: 10px; }
+    .poster-tile { aspect-ratio: 2 / 3; border-radius: 10px; background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); background-size: cover; background-position: center; }
     @keyframes scrollBg { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
     @media (prefers-reduced-motion: reduce) { .poster-wall-scroll { animation: none !important; } }
 
     /* ===== 白色毛玻璃卡片 ===== */
     .glass-card {
       position: relative; z-index: 1;
-      background: rgba(255, 255, 255, 0.82);
+      background: rgba(255, 255, 255, 0.85);
       backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-      border: 1.5px solid rgba(244, 114, 182, 0.18);
+      border: 1.5px solid rgba(59, 130, 246, 0.18);
       border-radius: 22px;
       padding: 2.6rem;
-      box-shadow: 0 18px 50px rgba(244, 114, 182, 0.16);
+      box-shadow: 0 18px 50px rgba(59, 130, 246, 0.16);
       width: 100%; max-width: 440px;
     }
     .glass-card .gradient-logo {
       font-size: 2rem; font-weight: 800;
-      background: linear-gradient(135deg, #f472b6 0%, #8b5cf6 100%);
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
       -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     }
     .glass-card input {
-      background: #fdf2f8; border: 1.5px solid rgba(244, 114, 182, 0.2);
+      background: #f0f6ff; border: 1.5px solid rgba(59, 130, 246, 0.2);
       border-radius: 12px; padding: 0.7rem 0.9rem; color: var(--text);
       font-size: 0.85rem; outline: none; transition: border-color 0.2s, box-shadow 0.2s;
       width: 100%; box-sizing: border-box;
     }
-    .glass-card input::placeholder { color: #cbb9d8; }
-    .glass-card input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(244, 114, 182, 0.14); }
+    .glass-card input::placeholder { color: #b6c2d4; opacity: 1; }
+    .glass-card input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.14); }
     .glass-card .btn-primary {
       width: 100%; margin-top: 1.2rem;
       background: var(--grad-deep); color: #fff; border: none; border-radius: 12px;
       padding: 0.72rem; font-weight: 700; font-size: 0.9rem; cursor: pointer;
       transition: transform 0.15s, box-shadow 0.15s;
     }
-    .glass-card .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(236, 72, 153, 0.35); }
+    .glass-card .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35); }
   </style>
 </head>
 <body>
-  <!-- 马卡龙海报墙 -->
+  <!-- 当季番海报墙 -->
   <div class="poster-wall">
     <div class="poster-wall-inner">
       <div class="poster-wall-scroll">
-        <div class="pw-grid">
-          <div class="poster-tile" style="background:linear-gradient(135deg,#f9a8d4,#f472b6)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#a78bfa,#c4b5fd)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#93c5fd,#bfdbfe)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#86efac,#bbf7d0)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#fcd34d,#fde68a)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#f9a8d4,#f472b6)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#93c5fd,#bfdbfe)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#a78bfa,#c4b5fd)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#86efac,#bbf7d0)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#f9a8d4,#f472b6)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#a78bfa,#c4b5fd)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#fcd34d,#fde68a)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#93c5fd,#bfdbfe)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#86efac,#bbf7d0)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#f9a8d4,#f472b6)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#93c5fd,#bfdbfe)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#fcd34d,#fde68a)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#93c5fd,#bfdbfe)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#a78bfa,#c4b5fd)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#f9a8d4,#f472b6)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#86efac,#bbf7d0)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#fcd34d,#fde68a)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#93c5fd,#bfdbfe)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#a78bfa,#c4b5fd)"></div>
-        </div>
-        <div class="pw-grid">
-          <div class="poster-tile" style="background:linear-gradient(135deg,#f9a8d4,#f472b6)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#a78bfa,#c4b5fd)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#93c5fd,#bfdbfe)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#86efac,#bbf7d0)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#fcd34d,#fde68a)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#f9a8d4,#f472b6)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#93c5fd,#bfdbfe)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#a78bfa,#c4b5fd)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#86efac,#bbf7d0)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#f9a8d4,#f472b6)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#a78bfa,#c4b5fd)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#fcd34d,#fde68a)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#93c5fd,#bfdbfe)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#86efac,#bbf7d0)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#f9a8d4,#f472b6)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#93c5fd,#bfdbfe)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#fcd34d,#fde68a)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#93c5fd,#bfdbfe)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#a78bfa,#c4b5fd)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#f9a8d4,#f472b6)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#86efac,#bbf7d0)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#fcd34d,#fde68a)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#93c5fd,#bfdbfe)"></div>
-          <div class="poster-tile" style="background:linear-gradient(135deg,#a78bfa,#c4b5fd)"></div>
-        </div>
+        <div class="pw-grid" id="pw-grid-1"></div>
+        <div class="pw-grid" id="pw-grid-2"></div>
       </div>
     </div>
   </div>
 
   <div class="glass-card">
     <div style="text-align:center;margin-bottom:1.5rem;">
-      <div class="gradient-logo">🌸 MikanDown</div>
-      <p style="color:#9b8ba8;font-size:0.8rem;">首次运行，请创建管理员账户</p>
+      <div class="gradient-logo">MikanDown</div>
+      <p style="color:#64748b;font-size:0.8rem;">首次运行，请创建管理员账户</p>
     </div>
 
     {% with messages = get_flashed_messages() %}
@@ -168,5 +119,32 @@
       <button type="submit" class="btn-primary">创建账户并开始</button>
     </form>
   </div>
+
+  <script>
+    // 用当季番海报填充背景方格
+    (async function fillPosterWall() {
+      const grids = [document.getElementById('pw-grid-1'), document.getElementById('pw-grid-2')];
+      if (!grids[0] || !grids[1]) return;
+      const TILES_PER_GRID = 24;
+      grids.forEach(g => {
+        for (let i = 0; i < TILES_PER_GRID; i++) {
+          const tile = document.createElement('div');
+          tile.className = 'poster-tile';
+          g.appendChild(tile);
+        }
+      });
+      let posters = [];
+      try {
+        const resp = await fetch('/api/login_posters');
+        if (resp.ok) posters = await resp.json();
+      } catch (e) { /* 忽略，用默认色块 */ }
+      if (!Array.isArray(posters) || posters.length === 0) return;
+      const tiles = document.querySelectorAll('.poster-tile');
+      tiles.forEach((tile, idx) => {
+        const img = posters[idx % posters.length];
+        if (img) tile.style.backgroundImage = `url('${img}')`;
+      });
+    })();
+  </script>
 </body>
 </html>
