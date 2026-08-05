@@ -24,4 +24,4 @@ VOLUME /app/data
 
 EXPOSE 5000
 
-CMD ["python", "main.py"]
+CMD ["/app/.venv/bin/python", "main.py"]
