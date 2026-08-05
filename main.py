@@ -17,7 +17,9 @@ from flask_apscheduler import APScheduler
 
 from backend_script import (process_all_feeds, load_history, save_history, clean_category_name, detect_missing_episodes)
 from bangumi_api import (search_subjects, get_subject, get_calendar,
-                          get_mikan_season_list)
+                          get_mikan_season_list,
+                          load_season_ratings, save_season_ratings,
+                          rating_needs_fetch, fetch_subject_rating)
 from curl_cffi import requests as cffi_requests
 import feedparser
 from qbittorrentapi import Client
@@ -620,7 +622,8 @@ def api_add_status():
 @app.route('/api/season')
 @login_required
 def api_season():
-    """当季番 — 纯 Mikan 首页数据（快），不再请求 Bangumi 日历/搜索"""
+    """当季番 — 纯 Mikan 首页数据（快），不再请求 Bangumi 日历/搜索。
+    评分从 season_ratings 缓存实时注入；无分/过期条目触发后台补分线程。"""
     global _season_cache, _season_cache_time
     now = time.time()
 
@@ -632,62 +635,121 @@ def api_season():
         _season_cache_time = 0
 
     if not force_refresh and _season_cache and (now - _season_cache_time) < _SEASON_CACHE_TTL:
-        return jsonify(_season_cache)
+        result = _season_cache
+    else:
+        config = load_config()
+        proxy = config.get('proxy') if config.get('proxy', {}).get('http') else None
+        subscribed_feeds = config.get('feeds', [])
 
-    config = load_config()
-    proxy = config.get('proxy') if config.get('proxy', {}).get('http') else None
-    subscribed_feeds = config.get('feeds', [])
+        def _same_bangumi_url(url_a: str, url_b: str) -> bool:
+            """判断两个 RSS URL 是否指向同一部番剧：
+            完全相等，或 bangumiId 相同（字幕组专属 RSS 带 &subgroupid=，与番剧级 RSS 是同一部番）。"""
+            if url_a == url_b:
+                return True
+            def _bangumi_id(u: str):
+                return parse_qs(urlparse(u).query).get('bangumiId', [None])[0]
+            a, b = _bangumi_id(url_a), _bangumi_id(url_b)
+            return bool(a and a == b)
 
-    def _same_bangumi_url(url_a: str, url_b: str) -> bool:
-        """判断两个 RSS URL 是否指向同一部番剧：
-        完全相等，或 bangumiId 相同（字幕组专属 RSS 带 &subgroupid=，与番剧级 RSS 是同一部番）。"""
-        if url_a == url_b:
-            return True
-        def _bangumi_id(u: str):
-            return parse_qs(urlparse(u).query).get('bangumiId', [None])[0]
-        a, b = _bangumi_id(url_a), _bangumi_id(url_b)
-        return bool(a and a == b)
+        # 唯一数据源：Mikan 首页（当季新番，按星期几/剧场版分组，含海报 + 最新更新日期）
+        mikan_items = get_mikan_season_list(proxy=proxy)
 
-    # 唯一数据源：Mikan 首页（当季新番，按星期几/剧场版分组，含海报 + 最新更新日期）
-    mikan_items = get_mikan_season_list(proxy=proxy)
+        result: list = []
+        by_weekday: dict[int, list] = {}
+        noid_counter = 0
+        for mikan in mikan_items:
+            if mikan.get('has_resource', True):
+                sid = mikan['bangumi_id']
+            else:
+                noid_counter += 1
+                sid = f"noid-{noid_counter}"   # 无资源番剧无 bangumi_id，用自增标识
+            entry = {
+                'subject_id': sid,             # 唯一，用作前端定位
+                'name': '',
+                'name_cn': mikan['title'],
+                'image': mikan.get('mikan_poster_url', ''),
+                'mikan_poster': mikan.get('mikan_poster_url', ''),
+                'summary': '',
+                'rating': 0,                   # 占位，返回前注入实时评分
+                'air_weekday': mikan.get('weekday', 0),   # 1=周一 ... 7=周日, 0=剧场版
+                'last_update': mikan.get('last_update', ''),   # 如 "2026/07/28"
+                'mikan_rss_url': mikan['rss_url'],
+                'has_resource': mikan.get('has_resource', True),
+                'is_subscribed': any(_same_bangumi_url(mikan['rss_url'], f.get('url', '')) for f in subscribed_feeds),
+            }
+            by_weekday.setdefault(mikan.get('weekday', 0), []).append(entry)
 
-    result: list = []
-    by_weekday: dict[int, list] = {}
-    noid_counter = 0
-    for mikan in mikan_items:
-        if mikan.get('has_resource', True):
-            sid = mikan['bangumi_id']
-        else:
-            noid_counter += 1
-            sid = f"noid-{noid_counter}"   # 无资源番剧无 bangumi_id，用自增标识
-        entry = {
-            'subject_id': sid,             # 唯一，用作前端定位
-            'name': '',
-            'name_cn': mikan['title'],
-            'image': mikan.get('mikan_poster_url', ''),
-            'mikan_poster': mikan.get('mikan_poster_url', ''),
-            'summary': '',
-            'rating': 0,
-            'air_weekday': mikan.get('weekday', 0),   # 1=周一 ... 7=周日, 0=剧场版
-            'last_update': mikan.get('last_update', ''),   # 如 "2026/07/28"
-            'mikan_rss_url': mikan['rss_url'],
-            'has_resource': mikan.get('has_resource', True),
-            'is_subscribed': any(_same_bangumi_url(mikan['rss_url'], f.get('url', '')) for f in subscribed_feeds),
-        }
-        by_weekday.setdefault(mikan.get('weekday', 0), []).append(entry)
+        # 按标准顺序分组输出：周一~周日 + 剧场版(0)，与 Mikan 首页星期分类一致
+        for wd in (1, 2, 3, 4, 5, 6, 7, 0):
+            entries = by_weekday.get(wd)
+            if entries:
+                result.append({'__separator__': True, 'weekday': wd})
+                result.extend(entries)
 
-    # 按标准顺序分组输出：周一~周日 + 剧场版(0)，与 Mikan 首页星期分类一致
-    for wd in (1, 2, 3, 4, 5, 6, 7, 0):
-        entries = by_weekday.get(wd)
-        if entries:
-            result.append({'__separator__': True, 'weekday': wd})
-            result.extend(entries)
+        has_data = any('__separator__' not in item for item in result)
+        if has_data:
+            _season_cache = result
+            _season_cache_time = now
 
-    has_data = any('__separator__' not in item for item in result)
-    if has_data:
-        _season_cache = result
-        _season_cache_time = now
-    return jsonify(result)
+    # 注入实时评分（不写进 season 缓存，评分更新后下次请求立即生效）
+    ratings = load_season_ratings()
+    need_fetch_ids: list[tuple[int, str]] = []
+    response_data = []
+    for item in result:
+        if '__separator__' in item:
+            response_data.append(item)
+            continue
+        entry = dict(item)
+        sid = entry['subject_id']
+        if isinstance(sid, int):
+            r = ratings.get(str(sid))
+            entry['rating'] = (r or {}).get('score', 0)
+            if rating_needs_fetch(ratings, sid):
+                need_fetch_ids.append((sid, entry.get('name_cn') or ''))
+        response_data.append(entry)
+
+    # 有需要补分的番剧 → 后台线程慢慢补（每部间隔限速，不阻塞页面）
+    if need_fetch_ids:
+        _ensure_rating_background(need_fetch_ids)
+
+    return jsonify(response_data)
+
+
+# ── 当季番评分后台补分 ────────────────────────────────
+_RATING_QUEUE_LOCK = threading.Lock()
+_rating_worker_running = False
+
+
+def _ensure_rating_background(need_fetch: list[tuple[int, str]]) -> None:
+    """启动后台评分补分线程（单例）。need_fetch: [(bangumi_id, name), ...]"""
+    global _rating_worker_running
+    if not need_fetch:
+        return
+    with _RATING_QUEUE_LOCK:
+        if _rating_worker_running:
+            return
+        _rating_worker_running = True
+    t = threading.Thread(target=_rating_worker, args=(need_fetch,), daemon=True)
+    t.start()
+
+
+def _rating_worker(need_fetch: list[tuple[int, str]]) -> None:
+    """后台线程：逐个抓取评分，间隔 1.5s 限速（Bangumi API 友好），慢慢补。"""
+    global _rating_worker_running
+    try:
+        config = load_config()
+        proxy = config.get('proxy') if config.get('proxy', {}).get('http') else None
+        logger.info(f"[评分后台] 开始补分: {len(need_fetch)} 部")
+        for idx, (sid, name) in enumerate(need_fetch):
+            fetch_subject_rating(sid, name, proxy)
+            if idx < len(need_fetch) - 1:
+                time.sleep(1.5)
+        logger.info("[评分后台] 补分完成")
+    except Exception as e:
+        logger.error(f"[评分后台] 补分异常: {e}")
+    finally:
+        with _RATING_QUEUE_LOCK:
+            _rating_worker_running = False
 
 
 def _fetch_subgroup_rss_map(bangumi_id, proxies_to_use):
@@ -946,6 +1008,24 @@ def scheduled_task():
         else:
             logger.warning("[APScheduler] 配置文件未找到或没有 Feed。")
         logger.info("--- [APScheduler] 定时任务执行完毕 ---")
+
+@scheduler.task('cron', id='season_rating_daily', hour=3, minute=30, misfire_grace_time=3600)
+def daily_season_rating_refresh():
+    """每天凌晨 3:30 全量刷新当季番评分（Bangumi 评分通常日更）。"""
+    with app.app_context():
+        logger.info("--- [APScheduler] 每日评分刷新开始 ---")
+        try:
+            config = load_config()
+            proxy = config.get('proxy') if config.get('proxy', {}).get('http') else None
+            mikan_items = get_mikan_season_list(proxy=proxy)
+            need = [(m['bangumi_id'], m.get('title', '')) for m in mikan_items
+                    if m.get('has_resource') and m.get('bangumi_id')]
+            logger.info(f"[每日评分] 待刷新 {len(need)} 部")
+            if need:
+                _ensure_rating_background(need)
+        except Exception as e:
+            logger.error(f"[每日评分] 刷新异常: {e}")
+        logger.info("--- [APScheduler] 每日评分刷新结束 ---")
 
 if __name__ == '__main__':
     scheduler.init_app(app)

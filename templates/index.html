@@ -1306,23 +1306,45 @@
 
     // ===== 当季番数据加载与渲染 =====
     let seasonData = null;
+    let seasonPollTimer = null;
+    let seasonPollCount = 0;
+    const SEASON_POLL_MAX = 45;   // 最多轮询 45 次 × 20s = 15 分钟（等待后台补分）
 
     async function loadSeasonData(forceRefresh = false) {
         const container = document.getElementById('season-container');
         if (!container) return;
-        container.innerHTML = '<div class="season-loading">加载中...</div>';
+        if (!container.innerHTML.includes('season-loading')) {
+            // 已有内容时保持显示，仅静默刷新（轮询补分场景）
+        } else {
+            container.innerHTML = '<div class="season-loading">加载中...</div>';
+        }
 
         try {
             const resp = await fetch('/api/season' + (forceRefresh ? '?refresh=1&_=' + Date.now() : ''));
             if (!resp.ok) {
-                container.innerHTML = '<div class="season-loading" style="color:#ef4444;">加载失败，请稍后重试</div>';
+                if (container.innerHTML.includes('season-loading')) {
+                    container.innerHTML = '<div class="season-loading" style="color:#ef4444;">加载失败，请稍后重试</div>';
+                }
                 return;
             }
             seasonData = await resp.json();
             renderSeason(seasonData);
+            scheduleSeasonPoll(seasonData);
         } catch (e) {
-            container.innerHTML = '<div class="season-loading" style="color:#ef4444;">网络错误: ' + e.message + '</div>';
+            if (container.innerHTML.includes('season-loading')) {
+                container.innerHTML = '<div class="season-loading" style="color:#ef4444;">网络错误: ' + e.message + '</div>';
+            }
         }
+    }
+
+    // 有"暂无评分"的番剧 → 后台正在补分，定时刷新直到评分到齐
+    function scheduleSeasonPoll(data) {
+        if (seasonPollTimer) { clearTimeout(seasonPollTimer); seasonPollTimer = null; }
+        const hasZeroRating = (data || []).some(i => !i.__separator__ && !(i.rating > 0));
+        if (!hasZeroRating) { seasonPollCount = 0; return; }
+        if (seasonPollCount >= SEASON_POLL_MAX) { seasonPollCount = 0; return; }
+        seasonPollCount++;
+        seasonPollTimer = setTimeout(() => loadSeasonData(false), 20000);
     }
 
     function renderSeason(data) {

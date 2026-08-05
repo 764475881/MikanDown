@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 CACHE_FILE = os.path.join(DATA_DIR, 'bangumi_cache.json')
+SEASON_RATINGS_FILE = os.path.join(DATA_DIR, 'season_ratings.json')
 API_BASE = 'https://api.bgm.tv'
 
 # 缓存有效期（秒）
@@ -517,3 +518,92 @@ def get_mikan_season_list(proxy: dict | None = None) -> list[dict]:
     except Exception as e:
         logger.error(f"Mikan 首页爬取失败: {e}")
         return []
+
+
+# ── 当季番评分缓存 ────────────────────────────────────
+# season_ratings.json:
+# {
+#   "12345": {"score": 7.8, "name": "标题", "fetched_at": 1234567890.0, "attempts": 1}
+# }
+# score=0 表示抓取过但 Bangumi 无评分（或抓取失败）；attempts 记录累计尝试次数
+SEASON_RATING_TTL = 24 * 3600      # 有分缓存 24h → 每天凌晨刷新一次
+SEASON_RATING_RETRY_TTL = 600      # 无分重试冷却 10 分钟（"没有分时立马更新一次"）
+SEASON_RATING_FAIL_TTL = 24 * 3600 # 多次失败后降级为每天重试一次
+
+
+def load_season_ratings() -> dict:
+    """读取评分缓存文件。返回 {str(bangumi_id): {score, name, fetched_at, attempts}}"""
+    try:
+        with open(SEASON_RATINGS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def save_season_ratings(ratings: dict) -> None:
+    """持久化评分缓存"""
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(SEASON_RATINGS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(ratings, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.warning(f"保存评分缓存失败: {e}")
+
+
+def rating_needs_fetch(ratings: dict, bangumi_id: int) -> bool:
+    """判断该番剧评分是否值得重新抓取：
+    - 从未抓过 → 立即抓
+    - 有分 → 超过 24h（每天凌晨刷新）
+    - 无分 → 尝试 <3 次且冷却 10 分钟过 → 立即重试；否则降级为 24h 一次"""
+    r = ratings.get(str(bangumi_id))
+    now = time.time()
+    if r is None:
+        return True
+    fetched_at = r.get('fetched_at', 0)
+    attempts = r.get('attempts', 0)
+    if r.get('score', 0) > 0:
+        return (now - fetched_at) > SEASON_RATING_TTL
+    if attempts < 3:
+        return (now - fetched_at) > SEASON_RATING_RETRY_TTL
+    return (now - fetched_at) > SEASON_RATING_FAIL_TTL
+
+
+def fetch_subject_rating(bangumi_id: int, name: str = '', proxy: dict | None = None) -> float:
+    """
+    直接调 Bangumi API 抓取番剧评分（绕过 subject 缓存，只写评分缓存文件）。
+    返回评分（0-10 浮点）；失败或无评分返回 0。
+    """
+    try:
+        kwargs = {'impersonate': 'chrome124', 'timeout': 15}
+        if proxy:
+            kwargs['proxies'] = proxy
+        resp = cffi_requests.get(f'{API_BASE}/v0/subjects/{bangumi_id}', **kwargs)
+        resp.raise_for_status()
+        raw = resp.json()
+        score = float((raw.get('rating') or {}).get('score') or 0)
+        ratings = load_season_ratings()
+        entry = ratings.get(str(bangumi_id), {})
+        entry.update({
+            'score': score,
+            'name': name or raw.get('name_cn') or raw.get('name', ''),
+            'fetched_at': time.time(),
+            'attempts': entry.get('attempts', 0) + 1,
+        })
+        ratings[str(bangumi_id)] = entry
+        save_season_ratings(ratings)
+        logger.info(f"评分抓取 {bangumi_id} ({entry['name']}): {score}")
+        return score
+    except Exception as e:
+        logger.error(f"评分抓取失败 {bangumi_id}: {e}")
+        # 失败也记录 fetched_at，避免立刻反复重试
+        ratings = load_season_ratings()
+        entry = ratings.get(str(bangumi_id), {})
+        entry.update({
+            'score': entry.get('score', 0),
+            'name': name or entry.get('name', ''),
+            'fetched_at': time.time(),
+            'attempts': entry.get('attempts', 0) + 1,
+        })
+        ratings[str(bangumi_id)] = entry
+        save_season_ratings(ratings)
+        return 0
