@@ -434,15 +434,21 @@ def get_qbit_episodes(feed_title: str, qbit_config: dict | None = None, subgroup
         torrents = qbt_client.torrents_info(category=cat_name)
         eps: set[int] = set()
         downloading: set[int] = set()
+        # 下载中状态：文件尚未就绪，不计入"已下载"
+        DL_STATES = ('downloading', 'metaDL', 'queuedDL', 'stalledDL', 'forcedDL',
+                     'checkingDL', 'allocating', 'pausedDL', 'stoppedDL')
         for t in torrents:
             ep = extract_episode_number(t.name)
             if ep is None:
                 continue
             if subgroup and not _title_is_group(t.name, subgroup):
                 continue
-            eps.add(ep)
-            if t.state in ('downloading', 'metaDL', 'queuedDL', 'stalledDL', 'forcedDL'):
+            if t.state.endswith('UP'):
+                # uploading/pausedUP/stoppedUP/stalledUP/queuedUP/checkingUP/forcedUP：文件已就绪
+                eps.add(ep)
+            elif t.state in DL_STATES:
                 downloading.add(ep)
+            # error/missingFiles/moving 等异常状态：既不认作已下载也不认作下载中
         return eps, True, downloading
     except Exception:
         return set(), False, set()
@@ -598,6 +604,8 @@ def detect_missing_episodes(
     # ── 5. 计算缺集 ──
     expected_range = set(range(1, total_episodes + 1))
     missing_ep_numbers = expected_range - downloaded_eps
+    # 下载中的集不算"缺"：正在获取，避免显示为缺失、也避免被"下载全部"重复补种
+    missing_ep_numbers = missing_ep_numbers - qbit_downloading
 
     # ── 6. 构建结果 ──
     episode_info = {}

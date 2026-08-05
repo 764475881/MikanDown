@@ -11,25 +11,25 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/js/tabler.min.js" defer></script>
     <style>
-:root {
-            --bg: #fdf2f8;
-            --bg-2: #f5f3ff;
+        :root {
+            --bg: #f0f6ff;
+            --bg-2: #e8f1ff;
             --card: #ffffff;
-            --card-border: rgba(244, 114, 182, 0.16);
-            --text: #4c3a55;
-            --text-2: #9b8ba8;
-            --text-3: #cbb9d8;
-            --primary: #f472b6;
-            --primary-deep: #ec4899;
-            --accent: #a78bfa;
-            --grad: linear-gradient(135deg, #f9a8d4 0%, #a78bfa 100%);
-            --grad-deep: linear-gradient(135deg, #f472b6 0%, #8b5cf6 100%);
-            --grad-soft: linear-gradient(135deg, #fce7f3 0%, #ede9fe 100%);
+            --card-border: rgba(59, 130, 246, 0.16);
+            --text: #1e3a5f;
+            --text-2: #64748b;
+            --text-3: #94a3b8;
+            --primary: #3b82f6;
+            --primary-deep: #2563eb;
+            --accent: #60a5fa;
+            --grad: linear-gradient(135deg, #93c5fd 0%, #60a5fa 100%);
+            --grad-deep: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            --grad-soft: linear-gradient(135deg, #dbeafe 0%, #e0f2fe 100%);
             --success: #34d399;
             --warning: #fbbf24;
             --danger: #f87171;
-            --shadow: 0 6px 24px rgba(244, 114, 182, 0.12);
-            --shadow-hover: 0 12px 34px rgba(167, 139, 250, 0.22);
+            --shadow: 0 6px 24px rgba(59, 130, 246, 0.12);
+            --shadow-hover: 0 12px 34px rgba(96, 165, 250, 0.22);
             --radius: 18px;
             --radius-sm: 12px;
         }
@@ -38,27 +38,27 @@
 
         body {
             background:
-                radial-gradient(circle at 12% 18%, rgba(249, 168, 212, 0.20) 0%, transparent 42%),
-                radial-gradient(circle at 88% 12%, rgba(196, 181, 253, 0.24) 0%, transparent 40%),
-                radial-gradient(circle at 72% 88%, rgba(254, 215, 170, 0.18) 0%, transparent 42%),
-                linear-gradient(160deg, #fdf2f8 0%, #f5f3ff 55%, #fdf2f8 100%);
+                radial-gradient(circle at 12% 18%, rgba(147, 197, 253, 0.20) 0%, transparent 42%),
+                radial-gradient(circle at 88% 12%, rgba(96, 165, 250, 0.24) 0%, transparent 40%),
+                radial-gradient(circle at 72% 88%, rgba(191, 219, 254, 0.18) 0%, transparent 42%),
+                linear-gradient(160deg, #f0f6ff 0%, #e8f1ff 55%, #f0f6ff 100%);
             background-attachment: fixed;
             color: var(--text);
         }
 
-        /* 背景漂浮小星星（纯 CSS 圆点，可爱点缀） */
+        /* 背景漂浮小圆点（纯 CSS，简洁点缀） */
         body::before {
             content: '';
             position: fixed; inset: 0; pointer-events: none; z-index: 0;
             background-image:
-                radial-gradient(circle 2px at 8% 22%, rgba(244,114,182,.35) 100%, transparent),
-                radial-gradient(circle 2px at 22% 74%, rgba(167,139,250,.40) 100%, transparent),
-                radial-gradient(circle 1.6px at 38% 12%, rgba(244,114,182,.30) 100%, transparent),
-                radial-gradient(circle 2.2px at 55% 64%, rgba(251,191,36,.35) 100%, transparent),
-                radial-gradient(circle 1.6px at 68% 30%, rgba(52,211,153,.35) 100%, transparent),
-                radial-gradient(circle 2px at 84% 52%, rgba(167,139,250,.35) 100%, transparent),
-                radial-gradient(circle 1.6px at 92% 84%, rgba(244,114,182,.30) 100%, transparent),
-                radial-gradient(circle 1.6px at 48% 40%, rgba(244,114,182,.22) 100%, transparent);
+                radial-gradient(circle 2px at 8% 22%, rgba(59,130,246,.30) 100%, transparent),
+                radial-gradient(circle 2px at 22% 74%, rgba(96,165,250,.35) 100%, transparent),
+                radial-gradient(circle 1.6px at 38% 12%, rgba(59,130,246,.25) 100%, transparent),
+                radial-gradient(circle 2.2px at 55% 64%, rgba(96,165,250,.30) 100%, transparent),
+                radial-gradient(circle 1.6px at 68% 30%, rgba(147,197,253,.35) 100%, transparent),
+                radial-gradient(circle 2px at 84% 52%, rgba(96,165,250,.30) 100%, transparent),
+                radial-gradient(circle 1.6px at 92% 84%, rgba(59,130,246,.25) 100%, transparent),
+                radial-gradient(circle 1.6px at 48% 40%, rgba(59,130,246,.20) 100%, transparent);
         }
 
         /* ===== 侧边栏 ===== */
@@ -66,8 +66,8 @@
             position: fixed; left: 0; top: 0; height: 100vh; width: 300px;
             background: rgba(255, 255, 255, 0.86);
             backdrop-filter: blur(14px);
-            border-right: 1px solid rgba(244, 114, 182, 0.12);
-            box-shadow: 6px 0 30px rgba(244, 114, 182, 0.10);
+            border-right: 1px solid rgba(59, 130, 246, 0.12);
+            box-shadow: 6px 0 30px rgba(59, 130, 246, 0.10);
             z-index: 100; overflow-y: auto;
             transform: translateX(0); transition: transform 0.3s ease-in-out;
             padding: 1.2rem 1rem; box-sizing: border-box;
@@ -78,7 +78,7 @@
             display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
             background: var(--grad-deep); color: #fff; border: none; border-left: none;
             border-radius: 0 14px 14px 0; cursor: pointer;
-            box-shadow: 3px 0 14px rgba(139, 92, 246, 0.35);
+            box-shadow: 3px 0 14px rgba(37, 99, 235, 0.35);
             transition: left 0.3s ease-in-out;
         }
         body.sidebar-collapsed .sidebar { transform: translateX(-100%); }
@@ -91,7 +91,7 @@
             -webkit-background-clip: text; background-clip: text;
             font-size: 1.35rem; font-weight: 800; text-align: center;
             margin-bottom: 1.4rem; padding-bottom: 0.85rem;
-            border-bottom: 2px dashed rgba(244, 114, 182, 0.25);
+            border-bottom: 2px dashed rgba(59, 130, 246, 0.25);
             letter-spacing: 0.06em;
         }
         .sidebar h1::after { content: ' ✿'; font-size: 0.9rem; }
@@ -110,13 +110,14 @@
             outline: none; width: 100%; box-sizing: border-box; margin-bottom: 0.5rem;
             transition: border-color 0.15s, box-shadow 0.15s;
         }
-        .control-section input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.16); }
+        .control-section input::placeholder { color: #b6c2d4; opacity: 1; }
+        .control-section input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.16); }
         .control-section button { width: 100%; padding: 0.5rem; border-radius: 10px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: none; transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s; }
         .control-section button:hover { transform: translateY(-1px); }
-        .btn-sidebar-save { background: var(--grad-soft); color: var(--primary-deep); border: 1px solid rgba(244, 114, 182, 0.18); }
-        .btn-sidebar-primary { background: var(--grad-deep); color: #fff; box-shadow: 0 4px 14px rgba(236, 72, 153, 0.30); }
+        .btn-sidebar-save { background: var(--grad-soft); color: var(--primary-deep); border: 1px solid rgba(59, 130, 246, 0.18); }
+        .btn-sidebar-primary { background: var(--grad-deep); color: #fff; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.30); }
         .btn-sidebar-contrast {
-            background: #fff; color: var(--primary-deep); border: 1.5px solid rgba(244, 114, 182, 0.28);
+            background: #fff; color: var(--primary-deep); border: 1.5px solid rgba(59, 130, 246, 0.28);
             display: block; text-align: center; padding: 0.5rem; border-radius: 10px;
             text-decoration: none; font-weight: 600;
         }
@@ -126,7 +127,7 @@
         .main-content { margin-left: 300px; width: calc(100% - 300px); padding: 1.2rem 1.6rem; transition: margin-left 0.3s ease-in-out, width 0.3s ease-in-out; box-sizing: border-box; position: relative; z-index: 1; }
 
         /* ===== 顶部栏 ===== */
-        .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.4rem; padding-bottom: 1rem; border-bottom: 2px dashed rgba(244, 114, 182, 0.22); }
+        .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.4rem; padding-bottom: 1rem; border-bottom: 2px dashed rgba(59, 130, 246, 0.22); }
         .topbar h2 { color: var(--text); font-size: 1.35rem; font-weight: 800; margin: 0; }
         .topbar-actions { display: flex; align-items: center; gap: 0.75rem; }
         .user-avatar {
@@ -134,7 +135,7 @@
             background: var(--grad-deep);
             display: flex; align-items: center; justify-content: center;
             font-size: 0.75rem; color: #fff; font-weight: 700;
-            box-shadow: 0 3px 10px rgba(236, 72, 153, 0.35);
+            box-shadow: 0 3px 10px rgba(37, 99, 235, 0.35);
         }
 
         /* ===== 状态卡片 ===== */
@@ -157,13 +158,13 @@
             font-size: 0.85rem; outline: none; box-shadow: var(--shadow);
             transition: border-color 0.15s, box-shadow 0.15s;
         }
-        .add-feed-row input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(244, 114, 182, 0.15); }
+        .add-feed-row input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15); }
         .btn-add-feed {
             background: var(--grad-deep); color: #fff; border: none; border-radius: 14px;
             padding: 0.6rem 1.4rem; font-weight: 700; font-size: 0.85rem; cursor: pointer;
-            transition: transform 0.15s, box-shadow 0.15s; box-shadow: 0 5px 16px rgba(236, 72, 153, 0.32);
+            transition: transform 0.15s, box-shadow 0.15s; box-shadow: 0 5px 16px rgba(37, 99, 235, 0.32);
         }
-        .btn-add-feed:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(236, 72, 153, 0.42); }
+        .btn-add-feed:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(37, 99, 235, 0.42); }
 
         /* ===== 订阅卡片网格 ===== */
         .feeds-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 1rem; }
@@ -177,10 +178,10 @@
         .feed-card .card-body { padding: 0.65rem 0.7rem; }
         .feed-card .card-body h6 { color: var(--text); font-size: 0.82rem; font-weight: 700; margin: 0 0 0.2rem 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .feed-card .card-body .subgroup { font-size: 0.65rem; color: var(--accent); }
-        .feed-card .card-footer { padding: 0.5rem 0.65rem; border-top: 1px dashed rgba(244, 114, 182, 0.18); display: flex; justify-content: center; }
+        .feed-card .card-footer { padding: 0.5rem 0.65rem; border-top: 1px dashed rgba(59, 130, 246, 0.18); display: flex; justify-content: center; }
         .feed-card .card-footer .delete-btn {
             background: transparent; color: var(--primary-deep);
-            border: 1.5px solid rgba(236, 72, 153, 0.4); border-radius: 999px;
+            border: 1.5px solid rgba(37, 99, 235, 0.4); border-radius: 999px;
             padding: 0.28rem 0.6rem; font-size: 0.65rem; cursor: pointer; width: 100%;
             transition: background 0.15s, color 0.15s;
         }
@@ -192,7 +193,7 @@
             border-radius: 999px; font-weight: 700; margin-top: 0.3rem; cursor: pointer;
             transition: opacity 0.15s, transform 0.15s;
         }
-        .ep-badge.missing { background: rgba(244, 114, 182, 0.16); color: var(--primary-deep); border: 1px solid rgba(244, 114, 182, 0.35); }
+        .ep-badge.missing { background: rgba(59, 130, 246, 0.16); color: var(--primary-deep); border: 1px solid rgba(59, 130, 246, 0.35); }
         .ep-badge.missing:hover { opacity: 0.8; transform: scale(1.05); }
         .ep-badge.complete { background: rgba(52, 211, 153, 0.15); color: #10b981; border: 1px solid rgba(52, 211, 153, 0.35); cursor: default; }
         .ep-badge.unmatched { background: rgba(251, 191, 36, 0.15); color: #d97706; border: 1px solid rgba(251, 191, 36, 0.4); cursor: pointer; }
@@ -201,7 +202,7 @@
 
         /* ===== 缺集详情弹窗 ===== */
         .missing-list { text-align: left; max-height: 50vh; overflow-y: auto; }
-        .missing-list .ep-row { display: flex; align-items: center; justify-content: space-between; padding: 0.55rem 0.65rem; border-bottom: 1px dashed rgba(244, 114, 182, 0.16); }
+        .missing-list .ep-row { display: flex; align-items: center; justify-content: space-between; padding: 0.55rem 0.65rem; border-bottom: 1px dashed rgba(59, 130, 246, 0.16); }
         .missing-list .ep-row:last-child { border-bottom: none; }
         .missing-list .ep-num { font-weight: 700; color: var(--text); font-size: 0.9rem; min-width: 3rem; }
         .missing-list .ep-status { font-size: 0.75rem; padding: 0.18rem 0.6rem; border-radius: 999px; font-weight: 600; }
@@ -210,7 +211,7 @@
         .missing-list .ep-dl-btn {
             background: var(--grad-deep); color: #fff; border: none; border-radius: 999px;
             padding: 0.3rem 0.75rem; font-size: 0.72rem; font-weight: 600; cursor: pointer;
-            transition: opacity 0.15s, transform 0.15s; box-shadow: 0 3px 10px rgba(236, 72, 153, 0.3);
+            transition: opacity 0.15s, transform 0.15s; box-shadow: 0 3px 10px rgba(37, 99, 235, 0.3);
         }
         .missing-list .ep-dl-btn:hover { opacity: 0.85; transform: translateY(-1px); }
         .missing-list .ep-dl-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; transform: none; }
@@ -227,7 +228,7 @@
             flex: 1; background: #fff; border: 1.5px solid var(--card-border); border-radius: 10px;
             padding: 0.45rem 0.65rem; color: var(--text); font-size: 0.8rem; outline: none;
         }
-        .bangumi-search-input input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.15); }
+        .bangumi-search-input input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); }
         .bangumi-search-input button {
             background: var(--grad-deep); color: #fff; border: none; border-radius: 10px;
             padding: 0.45rem 0.9rem; font-size: 0.75rem; font-weight: 600; cursor: pointer; white-space: nowrap;
@@ -243,28 +244,28 @@
 
         /* ===== 日志 ===== */
         .log-container {
-            height: 200px; overflow-y: scroll; background: rgba(244, 114, 182, 0.06);
+            height: 200px; overflow-y: scroll; background: rgba(59, 130, 246, 0.06);
             font-family: 'Menlo', 'Consolas', monospace; padding: 0.75rem; border-radius: 12px;
             white-space: pre-wrap; font-size: 0.75rem; color: var(--text);
-            border: 1px solid rgba(244, 114, 182, 0.16); margin-top: 0.5rem;
+            border: 1px solid rgba(59, 130, 246, 0.16); margin-top: 0.5rem;
         }
 
         /* ===== 模态框 ===== */
         .modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(76, 58, 85, 0.42); backdrop-filter: blur(6px);
+            background: rgba(30, 58, 95, 0.42); backdrop-filter: blur(6px);
             display: none; justify-content: center; align-items: center; z-index: 1000;
         }
         .processing-spinner {
             width: 36px; height: 36px; margin: 0 auto;
-            border: 3.5px solid rgba(244, 114, 182, 0.2); border-top-color: var(--primary);
+            border: 3.5px solid rgba(59, 130, 246, 0.2); border-top-color: var(--primary);
             border-radius: 50%; animation: spin 0.8s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         .modal-content {
             background: var(--card); padding: 1.8rem 2rem; border-radius: 22px;
             width: 90%; max-width: 500px; text-align: center;
-            border: 1.5px solid var(--card-border); box-shadow: 0 20px 60px rgba(139, 92, 246, 0.25);
+            border: 1.5px solid var(--card-border); box-shadow: 0 20px 60px rgba(37, 99, 235, 0.25);
         }
         .modal-content h3 { color: var(--text); margin: 0 0 1rem 0; font-size: 1.1rem; font-weight: 800; }
         .modal-content p { color: var(--text-2); font-size: 0.9rem; }
@@ -273,7 +274,7 @@
             padding: 0.5rem 0.7rem; color: var(--text); font-size: 0.8rem;
             outline: none; width: 100%; box-sizing: border-box; margin-bottom: 0.5rem;
         }
-        .modal-content input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.15); }
+        .modal-content input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); }
         .modal-buttons { margin-top: 1.5rem; display: flex; justify-content: center; gap: 0.75rem; flex-wrap: wrap; }
         .modal-buttons button {
             padding: 0.5rem 1.1rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600;
@@ -281,7 +282,7 @@
         }
         .modal-buttons button:hover { transform: translateY(-1px); }
         .modal-buttons .btn-modal-secondary { background: var(--grad-soft); color: var(--primary-deep); }
-        .modal-buttons .btn-modal-primary { background: var(--grad-deep); color: #fff; box-shadow: 0 4px 14px rgba(236, 72, 153, 0.3); }
+        .modal-buttons .btn-modal-primary { background: var(--grad-deep); color: #fff; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3); }
 
         /* ===== Tab 切换 ===== */
         .season-tabs { display: flex; gap: 0.4rem; margin-bottom: 1.5rem; background: rgba(255,255,255,0.7); padding: 0.35rem; border-radius: 999px; border: 1.5px solid var(--card-border); box-shadow: var(--shadow); width: fit-content; }
@@ -289,8 +290,8 @@
             padding: 0.5rem 1.4rem; font-size: 0.88rem; font-weight: 600; color: var(--text-2);
             cursor: pointer; border-radius: 999px; transition: all 0.2s; text-decoration: none;
         }
-        .season-tab:hover { color: var(--text); background: rgba(244, 114, 182, 0.08); }
-        .season-tab.active { color: #fff; background: var(--grad-deep); box-shadow: 0 4px 14px rgba(236, 72, 153, 0.35); }
+        .season-tab:hover { color: var(--text); background: rgba(59, 130, 246, 0.08); }
+        .season-tab.active { color: #fff; background: var(--grad-deep); box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35); }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
@@ -299,11 +300,11 @@
         .season-weekday-group h3 {
             color: var(--primary-deep); font-size: 0.88rem; font-weight: 800;
             letter-spacing: 0.05em; margin-bottom: 0.85rem; padding-bottom: 0.45rem;
-            border-bottom: 2px dashed rgba(244, 114, 182, 0.28);
+            border-bottom: 2px dashed rgba(59, 130, 246, 0.28);
             display: flex; align-items: center; gap: 0.4rem;
         }
         .season-weekday-group h3::before { content: '🌸'; font-size: 0.9rem; }
-        .season-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; }
+        .season-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.1rem; }
         .season-card {
             background: var(--card); border-radius: var(--radius); overflow: hidden;
             transition: transform 0.2s, box-shadow 0.2s; cursor: default;
@@ -312,23 +313,24 @@
         }
         .season-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); }
         .season-card .poster { width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block; background: var(--grad-soft); }
-        .season-card .card-body { padding: 0.65rem; display: flex; flex-direction: column; flex: 1; }
-        .season-card .card-title { color: var(--text); font-size: 0.8rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.25rem; }
-        .season-card .card-title-jp { color: var(--text-3); font-size: 0.65rem; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 0.35rem; }
-        .season-card .card-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
-        .season-card .card-rating { font-size: 0.7rem; color: #d97706; font-weight: 600; }
+        .season-card .card-body { padding: 0.75rem; display: flex; flex-direction: column; flex: 1; }
+        .season-card .card-title { color: var(--text); font-size: 0.92rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.25rem; }
+        .season-card .card-title-jp { color: var(--text-3); font-size: 0.7rem; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 0.4rem; }
+        .season-card .card-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.55rem; }
+        .season-card .card-rating { font-size: 0.78rem; color: #d97706; font-weight: 600; }
         .season-card .card-rating.none { color: var(--text-3); font-weight: 400; }
-        .season-card .card-day { font-size: 0.62rem; background: var(--grad-soft); color: var(--primary-deep); padding: 0.14rem 0.5rem; border-radius: 999px; font-weight: 600; }
+        .season-card .card-day { font-size: 0.66rem; background: var(--grad-soft); color: var(--primary-deep); padding: 0.15rem 0.55rem; border-radius: 999px; font-weight: 600; }
         .season-card .card-actions { margin-top: auto; }
         .season-card .season-btn {
-            width: 100%; padding: 0.45rem 0; border: none; border-radius: 12px;
-            font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: all 0.2s; text-align: center;
+            width: 100%; padding: 0.5rem 0; border: none; border-radius: 12px;
+            font-size: 0.8rem; font-weight: 700; cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 0.35rem;
         }
-        .season-card .season-btn.primary { background: var(--grad-deep); color: #fff; box-shadow: 0 4px 12px rgba(236, 72, 153, 0.3); }
+        .season-card .season-btn.primary { background: var(--grad-deep); color: #fff; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
         .season-card .season-btn.primary:hover { opacity: 0.88; transform: translateY(-1px); }
         .season-card .season-btn.primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
         .season-card .season-btn.subscribed { background: rgba(52, 211, 153, 0.15); color: #10b981; cursor: default; }
-        .season-card .season-btn.missing { background: #f3eef7; color: var(--text-2); cursor: pointer; }
+        .season-card .season-btn.missing { background: #f1f5f9; color: var(--text-2); cursor: pointer; }
         .season-card .season-btn.missing:hover { background: var(--grad-soft); }
         .season-loading { text-align: center; padding: 3rem; color: var(--text-2); font-size: 0.9rem; }
 
@@ -347,7 +349,7 @@
         /* ===== 字幕组选择弹窗 ===== */
         .sg-group {
             border: 1.5px solid var(--card-border); border-radius: 14px; margin-bottom: 0.7rem;
-            background: #fff; overflow: hidden; box-shadow: 0 3px 10px rgba(244, 114, 182, 0.08);
+            background: #fff; overflow: hidden; box-shadow: 0 3px 10px rgba(59, 130, 246, 0.08);
         }
         .sg-header { display: flex; align-items: center; gap: 0.6rem; padding: 0.65rem 0.8rem; cursor: pointer; transition: background 0.15s; }
         .sg-header:hover { background: var(--grad-soft); }
@@ -355,9 +357,9 @@
         .sg-count { color: var(--text-2); font-size: 0.7rem; white-space: nowrap; }
         .sg-arrow { color: var(--primary); font-size: 0.7rem; transition: transform 0.2s; }
         .sg-group.open .sg-arrow { transform: rotate(180deg); }
-        .sg-items { display: none; border-top: 1px dashed rgba(244, 114, 182, 0.22); padding: 0.5rem 0.8rem; background: #fff; }
+        .sg-items { display: none; border-top: 1px dashed rgba(59, 130, 246, 0.22); padding: 0.5rem 0.8rem; background: #fff; }
         .sg-group.open .sg-items { display: block; }
-        .sg-item { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 0.32rem 0; font-size: 0.75rem; color: var(--text); border-bottom: 1px dashed rgba(244, 114, 182, 0.12); }
+        .sg-item { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 0.32rem 0; font-size: 0.75rem; color: var(--text); border-bottom: 1px dashed rgba(59, 130, 246, 0.12); }
         .sg-item:last-child { border-bottom: none; }
         .sg-item .sg-item-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .sg-item .sg-item-size { color: var(--text-2); font-size: 0.68rem; white-space: nowrap; }
@@ -368,12 +370,12 @@
             flex: 1; background: #fff; border: 1.5px solid var(--card-border); border-radius: 10px;
             padding: 0.32rem 0.5rem; color: var(--text); font-size: 0.75rem; outline: none; margin-bottom: 0;
         }
-        .sg-filters input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.13); }
+        .sg-filters input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.13); }
         .sg-filters .sg-subscribe-btn {
             width: 100%; margin-top: 0.45rem; padding: 0.5rem 0;
             background: var(--grad-deep); color: #fff; border: none; border-radius: 12px;
             font-size: 0.8rem; font-weight: 700; cursor: pointer;
-            transition: opacity 0.15s, transform 0.15s; box-shadow: 0 4px 12px rgba(236, 72, 153, 0.3);
+            transition: opacity 0.15s, transform 0.15s; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
         }
         .sg-filters .sg-subscribe-btn:hover { opacity: 0.88; transform: translateY(-1px); }
         .sg-filters .sg-subscribe-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
@@ -384,7 +386,7 @@
             background: var(--card); border: 1.5px solid var(--card-border);
             border-left: 4px solid var(--success); color: var(--text);
             padding: 0.65rem 1.1rem; border-radius: 14px; font-size: 0.8rem; font-weight: 600;
-            box-shadow: 0 8px 26px rgba(139, 92, 246, 0.22);
+            box-shadow: 0 8px 26px rgba(37, 99, 235, 0.22);
             animation: toast-in 0.25s ease-out;
         }
         .toast-msg.err { border-left-color: var(--danger); }
@@ -393,8 +395,8 @@
         /* ===== 滚动条（可爱圆润） ===== */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(244, 114, 182, 0.35); border-radius: 999px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(236, 72, 153, 0.55); }
+        ::-webkit-scrollbar-thumb { background: rgba(59, 130, 246, 0.35); border-radius: 999px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(37, 99, 235, 0.55); }
     </style>
 </head>
 <body>
@@ -434,7 +436,7 @@
         <h2>代理设置</h2>
         <form id="proxy-form">
             <label for="http_proxy">HTTP/S 代理</label>
-            <input type="text" id="http_proxy" name="http_proxy" placeholder="http://127.0.0.1:7890" value="{{ config.proxy.http }}">
+            <input type="text" id="http_proxy" name="http_proxy" placeholder="http://127.0.0.1:7890" value="{{ config.proxy.http if config.proxy and config.proxy.http else '' }}">
             <button type="submit" class="btn-sidebar-save">保存代理</button>
         </form>
     </section>
@@ -473,8 +475,8 @@
     <div class="topbar">
         <h2>当前订阅列表</h2>
         <div class="topbar-actions">
-            <div class="user-avatar">A</div>
-            <span style="color:#4c3a55;font-size:0.85rem;font-weight:600;">admin</span>
+            <div class="user-avatar">{{ (username or 'U')[0]|upper }}</div>
+            <span style="color:#1e3a5f;font-size:0.85rem;font-weight:600;">{{ username or '未命名' }}</span>
             <a href="/logout" class="btn-sidebar-save" style="display:inline;padding:0.35rem 0.7rem;text-decoration:none;font-size:0.8rem;">登出</a>
         </div>
     </div>
@@ -526,7 +528,7 @@
         <h3 id="add-modal-title">为 "Some Title" 添加订阅</h3>
         <div id="add-processing-view" style="display:none; text-align:center; padding:1.5rem 0;">
             <div class="processing-spinner"></div>
-            <p id="add-processing-text" style="color:#4c3a55; font-size:0.9rem; margin-top:1rem;">正在后台处理：解析字幕组、获取海报、自动下载...</p>
+            <p id="add-processing-text" style="color:#1e3a5f; font-size:0.9rem; margin-top:1rem;">正在后台处理：解析字幕组、获取海报、自动下载...</p>
         </div>
         <div id="add-form-view">
             <p>请确认或修改此订阅的过滤规则（将继承全局规则）：</p>
@@ -554,7 +556,7 @@
 <div id="missing-modal-overlay" class="modal-overlay">
     <div class="modal-content" onclick="event.stopPropagation();" style="max-width:520px;">
         <h3 id="missing-modal-title">缺集检测</h3>
-        <p id="missing-modal-sub" style="color:#9b8ba8;font-size:0.8rem;margin-bottom:0.75rem;"></p>
+        <p id="missing-modal-sub" style="color:#64748b;font-size:0.8rem;margin-bottom:0.75rem;"></p>
         <div id="missing-modal-body">
             <div class="missing-list" id="missing-list"></div>
         </div>
@@ -569,7 +571,7 @@
 <div id="bangumi-modal-overlay" class="modal-overlay">
     <div class="modal-content" onclick="event.stopPropagation();" style="max-width:500px;">
         <h3 id="bangumi-modal-title">设置 Bangumi 匹配</h3>
-        <p style="font-size:0.8rem;color:#9b8ba8;">搜索番剧名称以关联 Bangumi 数据，用于缺集检测</p>
+        <p style="font-size:0.8rem;color:#64748b;">搜索番剧名称以关联 Bangumi 数据，用于缺集检测</p>
         <div class="bangumi-search-input">
             <input type="text" id="bangumi-search-input" placeholder="输入番剧中/日文名搜索..." onkeydown="if(event.key==='Enter'){event.preventDefault();doBangumiSearch();}">
             <button onclick="doBangumiSearch()">搜索</button>
@@ -585,7 +587,7 @@
 <div id="subgroup-modal-overlay" class="modal-overlay">
     <div class="modal-content" onclick="event.stopPropagation();" style="max-width:560px;">
         <h3 id="subgroup-modal-title">选择字幕组</h3>
-        <p style="font-size:0.8rem;color:#9b8ba8;margin-bottom:1rem;">展开字幕组查看资源列表，可配置过滤规则后订阅：</p>
+        <p style="font-size:0.8rem;color:#64748b;margin-bottom:1rem;">展开字幕组查看资源列表，可配置过滤规则后订阅：</p>
         <div id="subgroup-modal-body" style="text-align:left;max-height:60vh;overflow-y:auto;"></div>
         <div class="modal-buttons">
             <button class="btn-modal-secondary" onclick="closeSubgroupModal()">取消</button>
@@ -631,7 +633,7 @@
 
     function renderFeeds(feeds) {
         if (!feeds || feeds.length === 0) {
-            feedsContainer.innerHTML = '<p style="color:#9b8ba8;text-align:center;padding:2rem;">🌸 还没有添加任何 RSS 订阅，去「当季番」逛逛吧～</p>';
+            feedsContainer.innerHTML = '<p style="color:#64748b;text-align:center;padding:2rem;">🌸 还没有添加任何 RSS 订阅，去「当季番」逛逛吧～</p>';
             return;
         }
         const gridHtml = feeds.map((feed, index) => {
@@ -864,7 +866,7 @@
     async function deleteFeed(deleteFiles) {
         if (currentFeedId === null) return;
         modalText.innerText = '正在处理，请稍候...';
-        modalButtons.innerHTML = `<button aria-busy="true" style="background:#fdf2f8;color:#ec4899;padding:0.5rem 1.1rem;border:none;border-radius:999px;">删除中...</button>`;
+        modalButtons.innerHTML = `<button aria-busy="true" style="background:#f0f6ff;color:#2563eb;padding:0.5rem 1.1rem;border:none;border-radius:999px;">删除中...</button>`;
         const url = `/delete/${currentFeedId}?delete_files=${deleteFiles}`;
         try {
             const response = await fetch(url);
@@ -1061,7 +1063,8 @@
         if (count === 0) {
             badge.className = 'ep-badge complete';
             badge.textContent = dlCount > 0 ? `✓ 已下${dlCount}集` : '✓ 已追全';
-            badge.title = `已下载 ${dlCount}/${result.total_episodes} 集`;
+            if (dlActive > 0) badge.textContent += `·下中${dlActive}`;
+            badge.title = `已下载 ${dlCount}/${result.total_episodes} 集${dlActive ? `，${dlActive}集下载中` : ''}`;
             badge.onclick = () => openMissingModal(feedId);
         } else {
             const rssAvail = result.missing.filter(m => m.in_rss).length;
@@ -1109,7 +1112,10 @@
         }
 
         if (missing.length === 0) {
-            listEl.innerHTML = downloadedHtml + downloadingHtml + '<p style="text-align:center;color:#10b981;font-weight:600;padding:1rem;">🌸 所有剧集已下载完成</p>';
+            const doneMsg = downloadingList.length > 0
+                ? '<p style="text-align:center;color:#60a5fa;font-weight:600;padding:1rem;">⏳ 剩余剧集正在下载中</p>'
+                : '<p style="text-align:center;color:#10b981;font-weight:600;padding:1rem;">🌸 所有剧集已下载完成</p>';
+            listEl.innerHTML = downloadedHtml + downloadingHtml + doneMsg;
             document.getElementById('download-all-missing-btn').style.display = 'none';
         } else {
             const missingHtml = missing.map(m => {
@@ -1213,7 +1219,7 @@
         document.getElementById('bangumi-modal-title').textContent = '设置 Bangumi 匹配';
         document.getElementById('bangumi-search-input').value = '';
         document.getElementById('bangumi-results').innerHTML =
-            '<p style="text-align:center;color:#9b8ba8;padding:0.5rem;">输入番剧名称搜索</p>';
+            '<p style="text-align:center;color:#64748b;padding:0.5rem;">输入番剧名称搜索</p>';
         document.getElementById('bangumi-modal-overlay').style.display = 'flex';
         setTimeout(() => document.getElementById('bangumi-search-input').focus(), 100);
     }
@@ -1228,7 +1234,7 @@
         if (!keyword) return;
 
         const resultsEl = document.getElementById('bangumi-results');
-        resultsEl.innerHTML = '<p style="text-align:center;color:#9b8ba8;padding:0.5rem;">搜索中...</p>';
+        resultsEl.innerHTML = '<p style="text-align:center;color:#64748b;padding:0.5rem;">搜索中...</p>';
 
         try {
             const resp = await fetch('/api/feeds/bangumi-search', {
@@ -1238,7 +1244,7 @@
             });
             const data = await resp.json();
             if (!data.success || !data.results.length) {
-                resultsEl.innerHTML = '<p style="text-align:center;color:#9b8ba8;padding:0.5rem;">未找到匹配结果</p>';
+                resultsEl.innerHTML = '<p style="text-align:center;color:#64748b;padding:0.5rem;">未找到匹配结果</p>';
                 return;
             }
             resultsEl.innerHTML = data.results.map(r => `
@@ -1259,7 +1265,7 @@
     async function selectBangumi(subjectId, nameCn, el) {
         // 高亮选中
         document.querySelectorAll('.bangumi-result-item').forEach(i => i.style.background = 'transparent');
-        el.style.background = 'rgba(244,114,182,0.22)';
+        el.style.background = 'rgba(59,130,246,0.22)';
 
         if (currentBangumiFeedId === null) return;
 
@@ -1384,7 +1390,7 @@
             const ratingHtml = rating > 0
                 ? `<span class="card-rating">⭐ ${rating.toFixed(1)}</span>`
                 : `<span class="card-rating none">暂无评分</span>`;
-            const posterUrl = item.image || item.mikan_poster || 'https://placehold.co/240x320/fdf2f8/ec4899?text=No+Poster';
+            const posterUrl = item.image || item.mikan_poster || 'https://placehold.co/240x320/f0f6ff/2563eb?text=No+Poster';
             // 优先显示 Mikan 最新更新日期，如 "2026/07/28" → "07/28 更新"
             let dayText = label;
             if (item.last_update) {
@@ -1409,7 +1415,7 @@
 
             cardsHtml += `
                 <div class="season-card" data-subject-id="${item.subject_id}" data-mikan-poster="${escapeHtml(item.mikan_poster || '')}">
-                    <img class="poster" src="${posterUrl}" alt="${escapeHtml(item.name_cn || item.name)}" loading="lazy" onerror="this.src='https://placehold.co/240x320/fdf2f8/ec4899?text=Error'">
+                    <img class="poster" src="${posterUrl}" alt="${escapeHtml(item.name_cn || item.name)}" loading="lazy" onerror="this.src='https://placehold.co/240x320/f0f6ff/2563eb?text=Error'">
                     <div class="card-body">
                         <div class="card-title" title="${escapeHtml(item.name_cn || item.name)}">${escapeHtml(item.name_cn || '未知')}</div>
                         <div class="card-title-jp" title="${escapeHtml(jpName)}">${escapeHtml(jpName)}</div>
