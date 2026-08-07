@@ -443,7 +443,7 @@ def get_qbit_episodes(feed_title: str, qbit_config: dict | None = None, subgroup
                 continue
             if subgroup and not _title_is_group(t.name, subgroup):
                 continue
-            if t.state.endswith('UP'):
+            if t.state.endswith('UP') or t.state == 'uploading':
                 # uploading/pausedUP/stoppedUP/stalledUP/queuedUP/checkingUP/forcedUP：文件已就绪
                 eps.add(ep)
             elif t.state in DL_STATES:
