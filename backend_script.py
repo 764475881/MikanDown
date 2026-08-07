@@ -434,21 +434,24 @@ def get_qbit_episodes(feed_title: str, qbit_config: dict | None = None, subgroup
         torrents = qbt_client.torrents_info(category=cat_name)
         eps: set[int] = set()
         downloading: set[int] = set()
+        # 文件已就绪（已下载/可做种）：uploading + 所有 *UP + checkingResumeData(启动校验恢复数据)
+        UP_STATES = ('uploading', 'pausedUP', 'stoppedUP', 'stalledUP', 'queuedUP',
+                     'checkingUP', 'forcedUP', 'checkingResumeData')
         # 下载中状态：文件尚未就绪，不计入"已下载"
-        DL_STATES = ('downloading', 'metaDL', 'queuedDL', 'stalledDL', 'forcedDL',
-                     'checkingDL', 'allocating', 'pausedDL', 'stoppedDL')
+        DL_STATES = ('downloading', 'metaDL', 'forcedMetaDL', 'queuedDL', 'stalledDL',
+                     'forcedDL', 'checkingDL', 'allocating', 'pausedDL', 'stoppedDL')
         for t in torrents:
             ep = extract_episode_number(t.name)
             if ep is None:
                 continue
             if subgroup and not _title_is_group(t.name, subgroup):
                 continue
-            if t.state.endswith('UP') or t.state == 'uploading':
-                # uploading/pausedUP/stoppedUP/stalledUP/queuedUP/checkingUP/forcedUP：文件已就绪
+            if t.state in UP_STATES:
+                # 文件已就绪，均计入"已下载"
                 eps.add(ep)
             elif t.state in DL_STATES:
                 downloading.add(ep)
-            # error/missingFiles/moving 等异常状态：既不认作已下载也不认作下载中
+            # error/missingFiles/moving/unknown 等异常状态：既不认作已下载也不认作下载中
         return eps, True, downloading
     except Exception:
         return set(), False, set()
