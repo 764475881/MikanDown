@@ -23,6 +23,7 @@ from bangumi_api import (search_subjects, get_subject, get_calendar,
 from curl_cffi import requests as cffi_requests
 import feedparser
 from qbittorrentapi import Client
+import json_utils
 
 class Config: SCHEDULER_API_ENABLED = True
 app = Flask(__name__)
@@ -49,26 +50,11 @@ def load_config():
     except (json.JSONDecodeError, UnicodeDecodeError):
         # 配置文件损坏：备份坏文件并返回默认配置，避免整个服务崩掉
         logger.error(f"配置文件损坏，备份为 {CONFIG_FILE}.corrupt 并使用默认配置")
-        try:
-            os.replace(CONFIG_FILE, CONFIG_FILE + '.corrupt')
-        except OSError:
-            pass
+        json_utils.backup_corrupt_file(CONFIG_FILE)
         return {"feeds": [], "proxy": {}, "filters": {}, "qbit": {}, "auth": {}}
 def save_config(config):
-    # 原子写入：先写临时文件再替换，进程被杀/断电不会写坏 config.json
-    tmp = CONFIG_FILE + '.tmp'
-    try:
-        with open(tmp, 'w', encoding='utf-8') as f:
-            json.dump(config, f, indent=4, ensure_ascii=False)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, CONFIG_FILE)
-    finally:
-        if os.path.exists(tmp):
-            try:
-                os.remove(tmp)
-            except OSError:
-                pass
+    # 原子写入：唯一临时文件 + fsync + os.replace，多线程并发安全
+    json_utils.atomic_write_json(CONFIG_FILE, config, indent=4)
 
 @app.before_request
 def check_for_setup():

@@ -9,6 +9,7 @@ from curl_cffi import requests as cffi_requests  # 模拟浏览器的网络请�
 import os
 from notifier import send_notification
 from bangumi_api import extract_episode_number
+import json_utils
 # --- 2. 全局常量 ---
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -29,30 +30,12 @@ def load_history():
         return []
     except (json.JSONDecodeError, UnicodeDecodeError):
         # 文件损坏（容器被杀/断电等）：备份坏文件，下次写入自动重建
-        try:
-            os.replace(HISTORY_FILE, HISTORY_FILE + '.corrupt')
-        except OSError:
-            pass
+        json_utils.backup_corrupt_file(HISTORY_FILE)
         return []
 
 def save_history(history_list):
-    """将历史记录对象列表保存到 data/downloaded_history.json 文件（原子写入）。"""
-    tmp = HISTORY_FILE + '.tmp'
-    try:
-        with open(tmp, 'w', encoding='utf-8') as f:
-            # 将 Python 列表转换为格式化的 JSON 字符串并写入文件
-            # indent=4 使 JSON 文件格式优美，易于阅读
-            # ensure_ascii=False 确保中文字符能被正确写入
-            json.dump(history_list, f, indent=4, ensure_ascii=False)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, HISTORY_FILE)
-    finally:
-        if os.path.exists(tmp):
-            try:
-                os.remove(tmp)
-            except OSError:
-                pass
+    """将历史记录对象列表保存到 data/downloaded_history.json 文件（原子写入，多线程安全）。"""
+    json_utils.atomic_write_json(HISTORY_FILE, history_list, indent=4)
 
 
 def get_season_string(title: str) -> str | None:

@@ -10,6 +10,8 @@ from typing import Any
 from curl_cffi import requests as cffi_requests
 from bs4 import BeautifulSoup
 
+import json_utils
+
 logger = logging.getLogger(__name__)
 
 # ── 常量 ──────────────────────────────────────────────
@@ -49,28 +51,13 @@ _mem_cache: dict[str, dict] = {}
 
 
 def _atomic_write_json(path: str, data) -> None:
-    """原子写入 JSON：先写临时文件再 os.replace，进程被杀/断电也不会留下半个文件"""
-    tmp = path + '.tmp'
-    try:
-        with open(tmp, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
-    finally:
-        if os.path.exists(tmp):
-            try:
-                os.remove(tmp)
-            except OSError:
-                pass
+    """原子写入 JSON：唯一临时文件 + fsync + os.replace（多线程并发安全）"""
+    json_utils.atomic_write_json(path, data)
 
 
 def _backup_corrupt_file(path: str) -> None:
     """把损坏的 JSON 文件备份为 .corrupt 后缀，避免覆盖用户可排查的原始坏文件"""
-    try:
-        os.replace(path, path + '.corrupt')
-    except OSError:
-        pass
+    json_utils.backup_corrupt_file(path)
 
 
 def _load_cache() -> dict:
