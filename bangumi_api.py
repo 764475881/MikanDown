@@ -48,21 +48,50 @@ MIKAN_CACHE_TTL = 86400            # 24h — Mikan 搜索匹配结果
 _mem_cache: dict[str, dict] = {}
 
 
+def _atomic_write_json(path: str, data) -> None:
+    """原子写入 JSON：先写临时文件再 os.replace，进程被杀/断电也不会留下半个文件"""
+    tmp = path + '.tmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+
+
+def _backup_corrupt_file(path: str) -> None:
+    """把损坏的 JSON 文件备份为 .corrupt 后缀，避免覆盖用户可排查的原始坏文件"""
+    try:
+        os.replace(path, path + '.corrupt')
+    except OSError:
+        pass
+
+
 def _load_cache() -> dict:
-    """从文件加载 Bangumi 缓存"""
+    """从文件加载 Bangumi 缓存。文件缺失/损坏时返回空 dict，损坏文件备份后自动重建"""
     try:
         with open(CACHE_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+    except FileNotFoundError:
+        return {}
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        # 文件被写坏（容器被杀/断电等）：备份坏文件，避免反复报错并让后续写入重建
+        logger.warning(f"Bangumi 缓存文件损坏，备份后重建: {CACHE_FILE}")
+        _backup_corrupt_file(CACHE_FILE)
         return {}
 
 
 def _save_cache(cache: dict) -> None:
-    """持久化 Bangumi 缓存到文件"""
+    """持久化 Bangumi 缓存到文件（原子写入，进程被杀也不会写坏）"""
     try:
         os.makedirs(DATA_DIR, exist_ok=True)
-        with open(CACHE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(cache, f, indent=2, ensure_ascii=False)
+        _atomic_write_json(CACHE_FILE, cache)
     except Exception as e:
         logger.warning(f"保存 Bangumi 缓存失败: {e}")
 
@@ -536,16 +565,19 @@ def load_season_ratings() -> dict:
     try:
         with open(SEASON_RATINGS_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+    except FileNotFoundError:
+        return {}
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        logger.warning(f"评分缓存文件损坏，备份后重建: {SEASON_RATINGS_FILE}")
+        _backup_corrupt_file(SEASON_RATINGS_FILE)
         return {}
 
 
 def save_season_ratings(ratings: dict) -> None:
-    """持久化评分缓存"""
+    """持久化评分缓存（原子写入）"""
     try:
         os.makedirs(DATA_DIR, exist_ok=True)
-        with open(SEASON_RATINGS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(ratings, f, indent=2, ensure_ascii=False)
+        _atomic_write_json(SEASON_RATINGS_FILE, ratings)
     except Exception as e:
         logger.warning(f"保存评分缓存失败: {e}")
 

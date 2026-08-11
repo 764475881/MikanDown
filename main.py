@@ -44,10 +44,31 @@ _missing_cache_time: float = 0
 def load_config():
     try:
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f: return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+    except FileNotFoundError:
+        return {"feeds": [], "proxy": {}, "filters": {}, "qbit": {}, "auth": {}}
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        # 配置文件损坏：备份坏文件并返回默认配置，避免整个服务崩掉
+        logger.error(f"配置文件损坏，备份为 {CONFIG_FILE}.corrupt 并使用默认配置")
+        try:
+            os.replace(CONFIG_FILE, CONFIG_FILE + '.corrupt')
+        except OSError:
+            pass
         return {"feeds": [], "proxy": {}, "filters": {}, "qbit": {}, "auth": {}}
 def save_config(config):
-    with open(CONFIG_FILE, 'w', encoding='utf-8') as f: json.dump(config, f, indent=4, ensure_ascii=False)
+    # 原子写入：先写临时文件再替换，进程被杀/断电不会写坏 config.json
+    tmp = CONFIG_FILE + '.tmp'
+    try:
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=4, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, CONFIG_FILE)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
 
 @app.before_request
 def check_for_setup():
